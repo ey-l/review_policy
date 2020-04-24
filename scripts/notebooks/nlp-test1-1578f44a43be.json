@@ -1,0 +1,12 @@
+{
+  "type": "service_account",
+  "project_id": "soy-truth-248301",
+  "private_key_id": "1578f44a43bec11c639b892cd3b8751eea3f3902",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCPwEv4nZ1UvTEi\ndhUood7647iO7GeI38s90L7cFhkkcdMwjAx0MKyswU+5suXaoz9qNvG3HjBaxz7p\nUkRg/wCZieyv39Ft+2Jr36I1nLEYYKTL+Q3V3JSXrrd7jW4z5Z4A50exdcnwhQJn\nrTWslnxOvPrOLUdI1z6xu5Kxx/K+DOdTeaN/8oXwsY5nxhWDmjyxCI4KcoJnLrvp\napsAitiR8cx0u+bKsR2C7FOh78p91jZ7fpfYMqsWxuB+k6NUiqFVVLJ7D2LxSwIW\nqLF0DVVpJiev2phxEZzAtdq0wUpNFFSnlKGlrRZu0qg62McVBxThK0D9S3zSpENE\nGTPO5UFrAgMBAAECggEAQTNx4favfVeAuUZA65icGEUAmYb9oPYM6+FKKG43gjHE\nnhDvtyW6tHLL9AkCO4xu/4CjWzDsssgLr216iVowTfPisJT+m3l5lz8shk+nfcyc\nAs5YqadumGwNWhN4qD5eT7+XY5Tu/tJ9mEPWhA0PnfEWezzLR+0lSR0weMWdwvhO\nGNKrhzIde60yJV0/5hMd3RGMbxmpBJPKtzUN543KX4c9gwsJmwJZx/+BLBhOHcpF\n23m9rJyyxgK/kuxkPmiFtOVmPjJXNRdRnnQs7QVJiTGtGOgPS4skfYXLAtnqytjX\nNKCAljX6qABSQXZsxsCerwSp/nF7RWlPwVH6TL2dlQKBgQDJqi5zxfTFqOGkEivg\niUBocLfLor0zYC+6AUqROtLRqN22sC+Hxq9yoCQPWHFWZinApmGJb2+LAeoaq2J4\n5Rpm8k4uFTTEPXYsWTgx1YcpuNJ+QeYU4qGtqaxF4vriF2NGsi6fM7C4KII8CEaA\nCUJFZowBmHTU5f2n4pOGu/kSJQKBgQC2e4bJub6Z4GIZaX9PGZzhIQuqCkQJXbRp\nMkX3DY0NliAaWNPLa6UzalOCtPyL1dbTj3zkDTzjkzyWGW7Tw7bl9EON8qlim4pn\nGhPgRGjBY61Ora3khP+2lrJsA47e2ArIrbWTQadpI5gywaf5RuEKpcDAxwIohqpK\noM1YYEGITwKBgAwCjZepf2VSJHX/+wr5QZO2ustu2rO3k8ARGZ7CkRGZa/LYVUxR\nwdsivGMJkl5h4TSu8/oaX9s4dve1ozyt8D+XSJ6n9qeFPYdwnM8i91S9xBNu20P9\nJ0HPbAoRdX2HhQsNy4cBrhGZn//xQjmX05GMhOQHb1XKiKu5661HfpLdAoGBAJE4\nruS8wBV/PzKQBXOyo2l6PekdcFWvz9Jj4tAgZZ9pWLT++dYKHZdUR49ebxjtnaAR\nscdfTZSiaPXe2ZcHSvens1c0xV4nADbaxvSUHHXC2Hojt56DxWjOdsGE918auUJJ\nE5ZUCmGepRHHkeDMam1pyYLhHTOZL85iN+jb+Wr7AoGBAIKP5TareuWz3ylixWdO\nXWPlbP3Hw57kmGLIu++ANwMSzBRRAJsjRHESwEkGdn8w81PyAAliF7skxvxVC113\nfVSY986FbUALWS1XR8uomtrdYhili8J8HnbL1+MR07mic+KIp84RpXgidQJm9PgL\njslUG4V8et0ZERW7iaOLUjLj\n-----END PRIVATE KEY-----\n",
+  "client_email": "nlp-test1@soy-truth-248301.iam.gserviceaccount.com",
+  "client_id": "102721748449914866548",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/nlp-test1%40soy-truth-248301.iam.gserviceaccount.com"
+}

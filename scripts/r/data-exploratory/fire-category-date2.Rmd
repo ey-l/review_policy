@@ -1,0 +1,395 @@
+---
+title: "Amazon Fire Product Categories & Review Date/Time Part 2"
+author: "Eugenie"
+date: "30/10/2019"
+output: 
+  html_document:
+    toc: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load Source File
+
+Data pre-processing is included, where special chars and minimal stop-words are removed.
+```{r echo=T, results='hide', message=F, warning=F}
+library(data.table)
+## load review data
+source("~/Dropbox/Eugenie/scripts/libs.R")
+```
+
+```{r, include=FALSE}
+# Load review data
+reviews3.csv <- read.csv("~/Dropbox/Eugenie/data/processed/merged-reviews.csv")
+reviews3.csv$date <- as.Date(reviews3.csv$date, "%Y-%m-%d")
+reviews3.csv$week <- as.Date(reviews3.csv$week, "%Y-%m-%d")
+# Load brand.bi data
+tablet_brands <- read_excel("~/Dropbox/Eugenie/data/raw/amazon-tablets.xlsx")
+```
+
+```{r, include=FALSE}
+# Data Processing
+# Drop records before 2013.
+reviews3.csv <- reviews3.csv[as.numeric(as.character(reviews3.csv$year))>2013,]
+# Drop records with no product category.
+reviews3.csv <- reviews3.csv[reviews3.csv$product_cat != 'none',]
+# Get selected columns for further analysis.
+reviews.product <- reviews3.csv[,c('recid','item_id','incentivized','product_cat','rating','word_count','helpful_yes','date','year','month','week')]
+```
+
+```{r, include=FALSE}
+# Add 'after_ban' label
+reviews.product['after_ban'] <- ifelse(reviews.product$date>'2016-10-02',1,0)
+reviews.product$after_ban <- as.factor(reviews.product$after_ban)
+levels(reviews.product$after_ban) <- c("before", "after")
+```
+
+```{r, include=FALSE}
+# Get tablets
+tablets <- reviews.product[reviews.product$product_cat == "tablets",]
+# Get brands
+tablets <- merge(tablets, tablet_brands)
+# Fire ids
+fire.id <- c("B010BWYDYA", "B01GEW27DA", "B01M3ULMWP", "B01MTF2Z37", "B073VVC94R", "B077H3HJJM", "B07F4P3JH7", "B0794Z55CH", "B07N8VFFNS", "B07N8XHDVX", "B0794PD8NR")
+# Get binary brands
+tablets["brand.bi"] <- ifelse(tablets$item_id %in% fire.id, "fire", "other")
+```
+
+```{r,include=FALSE}
+# Compute rating stats without splitting incentivized vs. non-incentivized reviews at all
+reviews.product <- tablets
+
+# Mean rating by day
+reviews.product <- reviews.product %>%
+  group_by(brand.bi, date) %>%
+  mutate(day_rating = mean(rating))
+
+# Mean rating by week
+reviews.product <- reviews.product %>%
+  group_by(brand.bi, year, week) %>%
+  mutate(week_rating = mean(rating))
+
+# Mean word_count by day
+reviews.product <- reviews.product %>%
+  group_by(brand.bi, date) %>%
+  mutate(day_length = mean(word_count))
+
+# Mean word_count by week
+reviews.product <- reviews.product %>%
+  group_by(brand.bi, year, week) %>%
+  mutate(week_length = mean(word_count))
+```
+
+```{r,include=FALSE}
+# Bin the review length
+bins <- c(-1,10,20,30,50,100,200,Inf)
+reviews.product['word_count.binned'] <- cut(reviews.product$word_count, breaks=bins,
+                                        labels=c('0-10','10-20','20-30','30-50','50-100','100-200','200+'))
+reviews.product$word_count.binned <- as.factor(reviews.product$word_count.binned)
+```
+
+```{r, include=FALSE}
+# For the review length test: 
+# Get mean, variance, and standard deviation of the number of reviews per day by item
+reviews.length <- reviews.product[reviews.product$after_ban == "before",] %>%
+  group_by(brand.bi) %>%
+  mutate(sd = sd(word_count)) %>%
+  mutate(variance = var(word_count)) %>%
+  mutate(mean = mean(word_count))
+
+reviews.length <- reviews.length[,c("brand.bi", "sd", "variance", "mean")] %>% distinct()
+```
+
+```{r,echo=FALSE}
+# Compute stds
+reviews.length <- reviews.length %>%
+  group_by(brand.bi) %>%
+  mutate(threshold_2sd = mean+2*sd) %>%
+  mutate(threshold_3sd = mean+3*sd)
+```
+
+```{r,echo=FALSE}
+# Label pass/fail tests
+reviews.product <- merge(reviews.product, reviews.length, by = 'brand.bi')
+reviews.product['word_count.2sd'] <- ifelse(reviews.product$word_count>reviews.product$threshold_2sd, 'fail', 'pass')
+reviews.product['word_count.3sd'] <- ifelse(reviews.product$word_count>reviews.product$threshold_3sd, 'fail', 'pass')
+```
+
+
+# Time Data vs. Rating
+
+## Plot mean rating over time by brand.bi without splitting incentivized vs. non-incentivized reviews at all
+
+### Rating average by day
+```{r}
+## Plot by day
+ggplot(NULL, aes(x = date, y = day_rating))+
+  geom_point(data=reviews.product, aes(color = "daily ave rating"), alpha = 0.7,size=0.2)+
+  geom_smooth(data=reviews.product,method = 'auto',aes(color='daily ave rating line'),size=1,alpha = 0.6)+
+  theme_minimal()+
+  facet_grid(rows=vars(brand.bi))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  labs(x='day',y='mean rating',fill='category',title='Product Category Mean Rating by Day')
+```
+
+### Rating averaged by week
+```{r,echo=FALSE}
+## Plot by week
+ggplot(NULL, aes(x = week, y = week_rating))+
+  geom_point(data=reviews.product, aes(color = "weekly ave rating"), alpha = 0.7,size=0.2)+
+  geom_smooth(data=reviews.product,method = 'auto',aes(color='weekly ave rating line'),size=1,alpha = 0.6)+
+  theme_minimal()+
+  facet_grid(rows=vars(brand.bi))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  labs(x='day',y='mean rating',fill='category',title='Product Category Mean Rating by Week')
+```
+
+## Plot rating distribution by proportion
+
+### Rating proportion in a day
+```{r,echo=FALSE}
+## Percentage of rating vs. week
+ggplot(data=reviews.product, aes(date))+
+  geom_bar(aes(fill=as.factor(rating)), position="fill")+
+  facet_grid(rows=vars(brand.bi))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  scale_fill_brewer(palette="RdBu")+
+  ylab('proportion')
+```
+
+### Rating proportion in a week
+```{r,echo=FALSE}
+## Percentage of rating vs. week
+ggplot(data=reviews.product, aes(week))+
+  geom_bar(aes(fill=as.factor(rating)), position="fill")+
+  facet_grid(rows=vars(brand.bi))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  scale_fill_brewer(palette="RdBu")+
+  ylab('proportion')
+```
+
+
+# Time Data vs. Review Length
+
+## Average review length
+### Length average by day
+```{r}
+## Plot by day
+ggplot(NULL, aes(x = date, y = day_length))+
+  geom_point(data=reviews.product, aes(color = "daily ave length"), alpha = 0.7,size=0.2)+
+  geom_smooth(data=reviews.product,method = 'auto',aes(color='daily ave length line'),size=1,alpha = 0.6)+
+  theme_minimal()+
+  facet_grid(rows=vars(brand.bi))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  labs(x='day',y='mean length',fill='category',title='Product Category Mean Length by Day')
+```
+
+### Length averaged by week
+```{r,echo=FALSE}
+## Plot by week
+ggplot(NULL, aes(x = week, y = week_length))+
+  geom_point(data=reviews.product, aes(color = "weekly ave length"), alpha = 0.7,size=0.2)+
+  geom_smooth(data=reviews.product,method = 'auto',aes(color='weekly ave length line'),size=1,alpha = 0.6)+
+  theme_minimal()+
+  facet_grid(rows=vars(brand.bi))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  labs(x='day',y='mean length',fill='category',title='Product Category Mean Length by Week')
+```
+
+
+## Plot rating distribution by proportion
+### Rating proportion in a day
+```{r,echo=FALSE}
+ggplot(data=reviews.product, aes(date))+
+  geom_bar(aes(fill=word_count.binned), position="fill")+
+  facet_grid(rows=vars(brand.bi))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  scale_fill_brewer(palette="RdBu")+
+  ylab('proportion')
+```
+
+### Rating proportion in a week
+```{r,echo=FALSE}
+## Percentage of rating vs. week
+ggplot(data=reviews.product, aes(week))+
+  geom_bar(aes(fill=word_count.binned), position="fill")+
+  facet_grid(rows=vars(brand.bi))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  scale_fill_brewer(palette="RdBu")+
+  ylab('proportion')
+```
+
+# Passing vs. Failing Reviews
+```{r,include=FALSE}
+# Compute stats grouped by 2sd results
+# Mean rating by day
+reviews.product <- reviews.product %>%
+  group_by(brand.bi, word_count.2sd, date) %>%
+  mutate(day_rating.2sd = mean(rating))
+
+# Mean rating by week
+reviews.product <- reviews.product %>%
+  group_by(brand.bi, word_count.2sd, year, week) %>%
+  mutate(week_rating.2sd = mean(rating))
+
+# Mean word_count by day
+reviews.product <- reviews.product %>%
+  group_by(brand.bi, word_count.2sd, date) %>%
+  mutate(day_length.2sd = mean(word_count))
+
+# Mean word_count by week
+reviews.product <- reviews.product %>%
+  group_by(brand.bi, word_count.2sd, year, week) %>%
+  mutate(week_length.2sd = mean(word_count))
+```
+
+```{r,include=FALSE}
+# Compute stats grouped by 3sd results
+# Mean rating by day
+reviews.product <- reviews.product %>%
+  group_by(brand.bi, word_count.3sd, date) %>%
+  mutate(day_rating.3sd = mean(rating))
+
+# Mean rating by week
+reviews.product <- reviews.product %>%
+  group_by(brand.bi, word_count.3sd, year, week) %>%
+  mutate(week_rating.3sd = mean(rating))
+
+# Mean word_count by day
+reviews.product <- reviews.product %>%
+  group_by(brand.bi, word_count.3sd, date) %>%
+  mutate(day_length.3sd = mean(word_count))
+
+# Mean word_count by week
+reviews.product <- reviews.product %>%
+  group_by(brand.bi, word_count.3sd, year, week) %>%
+  mutate(week_length.3sd = mean(word_count))
+```
+
+```{r,include=FALSE}
+## Split on test result
+pass.2sd <- reviews.product[reviews.product$word_count.2sd=='pass',]
+fail.2sd <- reviews.product[reviews.product$word_count.2sd=='fail',]
+pass.3sd <- reviews.product[reviews.product$word_count.3sd=='pass',]
+fail.3sd <- reviews.product[reviews.product$word_count.3sd=='fail',]
+```
+
+## Rating average by day
+### 2sd
+```{r,echo=FALSE}
+## plot by day
+ggplot(NULL, aes(x = date, y = day_rating.2sd))+
+  geom_point(data=pass.2sd, aes(color = "passing"), alpha = 0.7,size=0.2)+
+  geom_point(data=fail.2sd, aes(color = "failing"), alpha = 0.3,size=0.2)+
+  geom_smooth(data=pass.2sd,method = 'auto',aes(color='passing-line'),size=1,alpha = 0.6)+
+  geom_smooth(data=fail.2sd,method = 'auto',aes(color='failing-line'),size=1,alpha = 0.6)+
+  theme_minimal()+
+  facet_grid(rows=vars(brand.bi))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  labs(x='day',y='mean rating',fill='category',title='Product Category Mean Rating by Day')
+```
+
+### 3sd
+```{r,echo=FALSE}
+## plot by day
+ggplot(NULL, aes(x = date, y = day_rating.3sd))+
+  geom_point(data=pass.2sd, aes(color = "passing"), alpha = 0.7,size=0.2)+
+  geom_point(data=fail.2sd, aes(color = "failing"), alpha = 0.3,size=0.2)+
+  geom_smooth(data=pass.2sd,method = 'auto',aes(color='passing-line'),size=1,alpha = 0.6)+
+  geom_smooth(data=fail.2sd,method = 'auto',aes(color='failing-line'),size=1,alpha = 0.6)+
+  theme_minimal()+
+  facet_grid(rows=vars(brand.bi))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  labs(x='day',y='mean rating',fill='category',title='Product Category Mean Rating by Day')
+```
+
+## Rating averaged by week
+### 2sd
+```{r,echo=FALSE}
+## by week
+ggplot(NULL, aes(x = week, y = week_rating.2sd))+ 
+  geom_point(data=pass.2sd, aes(color = "passing"), alpha = 0.7,size=0.2)+
+  geom_point(data=fail.2sd, aes(color = "failing"), alpha = 0.7,size=0.2)+
+  geom_smooth(data=pass.2sd,method = 'auto',aes(color='passing-line'),size=1,alpha = 0.6)+
+  geom_smooth(data=fail.2sd,method = 'auto',aes(color='failing-line'),size=1,alpha = 0.6)+
+  theme_minimal()+
+  facet_grid(rows=vars(brand.bi))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  labs(x='week',y='mean rating',fill='category',title='Product Category Mean Rating by Week')
+```
+
+### 3sd
+```{r,echo=FALSE}
+## by week
+ggplot(NULL, aes(x = week, y = week_rating.3sd))+ 
+  geom_point(data=pass.2sd, aes(color = "passing"), alpha = 0.7,size=0.2)+
+  geom_point(data=fail.2sd, aes(color = "failing"), alpha = 0.7,size=0.2)+
+  geom_smooth(data=pass.2sd,method = 'auto',aes(color='passing-line'),size=1,alpha = 0.6)+
+  geom_smooth(data=fail.2sd,method = 'auto',aes(color='failing-line'),size=1,alpha = 0.6)+
+  theme_minimal()+
+  facet_grid(rows=vars(brand.bi))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  labs(x='week',y='mean rating',fill='category',title='Product Category Mean Rating by Week')
+```
+
+## Length average by day
+### 2sd
+```{r,echo=FALSE}
+## plot by day
+ggplot(NULL, aes(x = date, y = day_length.2sd))+
+  geom_point(data=pass.2sd, aes(color = "passing"), alpha = 0.7,size=0.2)+
+  geom_point(data=fail.2sd, aes(color = "failing"), alpha = 0.3,size=0.2)+
+  geom_smooth(data=pass.2sd,method = 'auto',aes(color='passing-line'),size=1,alpha = 0.6)+
+  geom_smooth(data=fail.2sd,method = 'auto',aes(color='failing-line'),size=1,alpha = 0.6)+
+  theme_minimal()+
+  facet_grid(rows=vars(brand.bi))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  labs(x='day',y='mean rating',fill='category',title='Product Category Mean Rating by Day')
+```
+
+### 3sd
+```{r,echo=FALSE}
+## plot by day
+ggplot(NULL, aes(x = date, y = day_length.3sd))+
+  geom_point(data=pass.2sd, aes(color = "passing"), alpha = 0.7,size=0.2)+
+  geom_point(data=fail.2sd, aes(color = "failing"), alpha = 0.3,size=0.2)+
+  geom_smooth(data=pass.2sd,method = 'auto',aes(color='passing-line'),size=1,alpha = 0.6)+
+  geom_smooth(data=fail.2sd,method = 'auto',aes(color='failing-line'),size=1,alpha = 0.6)+
+  theme_minimal()+
+  facet_grid(rows=vars(brand.bi))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  labs(x='day',y='mean rating',fill='category',title='Product Category Mean Rating by Day')
+```
+
+## Length averaged by week
+### 2sd
+```{r,echo=FALSE}
+## by week
+ggplot(NULL, aes(x = week, y = week_length.2sd))+ 
+  geom_point(data=pass.2sd, aes(color = "passing"), alpha = 0.7,size=0.2)+
+  geom_point(data=fail.2sd, aes(color = "failing"), alpha = 0.7,size=0.2)+
+  geom_smooth(data=pass.2sd,method = 'auto',aes(color='passing-line'),size=1,alpha = 0.6)+
+  geom_smooth(data=fail.2sd,method = 'auto',aes(color='failing-line'),size=1,alpha = 0.6)+
+  theme_minimal()+
+  facet_grid(rows=vars(brand.bi))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  labs(x='week',y='mean rating',fill='category',title='Product Category Mean Rating by Week')
+```
+
+### 3sd
+```{r,echo=FALSE}
+## by week
+ggplot(NULL, aes(x = week, y = week_length.3sd))+ 
+  geom_point(data=pass.2sd, aes(color = "passing"), alpha = 0.7,size=0.2)+
+  geom_point(data=fail.2sd, aes(color = "failing"), alpha = 0.7,size=0.2)+
+  geom_smooth(data=pass.2sd,method = 'auto',aes(color='passing-line'),size=1,alpha = 0.6)+
+  geom_smooth(data=fail.2sd,method = 'auto',aes(color='failing-line'),size=1,alpha = 0.6)+
+  theme_minimal()+
+  facet_grid(rows=vars(brand.bi))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  labs(x='week',y='mean rating',fill='category',title='Product Category Mean Rating by Week')
+```
+

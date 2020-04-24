@@ -1,0 +1,250 @@
+---
+title: "Product Categories & Review Date/Time Part 2"
+author: "Eugenie"
+date: "06/08/2019"
+output: 
+  html_document:
+    toc: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load Source File
+
+Data pre-processing is included, where special chars and minimal stop-words are removed.
+```{r echo=T, results='hide', message=F, warning=F}
+## load review data
+source("~/Dropbox/Eugenie/scripts/utils.R")
+```
+
+
+# Data Processing
+Add category data as extra columns. Join on either item_id or child_id.
+```{r}
+reviews2.temp <- reviews2.csv
+```
+
+Drop records before 2012.
+```{r}
+reviews2.temp <- reviews2.temp[as.numeric(as.character(reviews2.temp$year))>2013,]
+```
+
+Drop records after 2018-10-07 since it's not a full week.
+```{r}
+reviews2.temp <- reviews2.temp[reviews2.temp$date < '2018-10-07',]
+```
+
+Drop records with no product category.
+```{r}
+reviews2.temp <- reviews2.temp[reviews2.temp$product_cat != 'none',]
+```
+
+Get selected columns for further analysis.
+```{r}
+reviews.product <- reviews2.temp[,c('recid','item_id','incentivized','product_cat','rating','word_count','helpful_yes','date','year','month','week')]
+```
+
+Compute rating stats without splitting incentivized vs. non-incentivized reviews at all.
+```{r,include=FALSE}
+## mean rating by day
+reviews.product <- reviews.product %>%
+  group_by(product_cat, date) %>%
+  mutate(day_rating = mean(rating))
+
+## mean rating by week
+reviews.product <- reviews.product %>%
+  group_by(product_cat, year, week(date)) %>%
+  mutate(week_rating = mean(rating))
+
+## mean rating by month
+reviews.product <- reviews.product %>%
+  group_by(product_cat, month) %>%
+  mutate(month_rating = mean(rating))
+```
+
+Bin the review length.
+```{r,include=FALSE}
+bins <- c(-1,50,100,200,500,Inf)
+reviews.product['word_count.binned'] <- cut(reviews.product$word_count, 
+                                        breaks=bins, labels=c('0-50','50-100','100-200','200-500','500+'))
+reviews.product$word_count.binned <- as.factor(reviews.product$word_count.binned)
+```
+
+
+# Time Data vs. Rating
+
+## Plot mean rating over time by product_cat without splitting incentivized vs. non-incentivized reviews at all
+
+### Rating average by day
+```{r}
+## plot by day
+ggplot(NULL, aes(x = date, y = day_rating))+
+  geom_point(data=reviews.product, aes(color = "daily ave rating"), alpha = 0.7,size=0.2)+
+  geom_smooth(data=reviews.product,method = 'auto',aes(color='daily ave rating line'),size=1,alpha = 0.6)+
+  theme_minimal()+
+  facet_grid(rows=vars(product_cat))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  labs(x='day',y='mean rating',fill='category',title='Product Category Mean Rating by Day')
+```
+
+### Rating averaged by week
+```{r,echo=FALSE}
+## plot by week
+ggplot(NULL, aes(x = week, y = week_rating))+
+  geom_point(data=reviews.product, aes(color = "weekly ave rating"), alpha = 0.7,size=0.2)+
+  geom_smooth(data=reviews.product,method = 'auto',aes(color='weekly ave rating line'),size=1,alpha = 0.6)+
+  theme_minimal()+
+  facet_grid(rows=vars(product_cat))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  labs(x='day',y='mean rating',fill='category',title='Product Category Mean Rating by Week')
+```
+
+### Rating averaged by month
+```{r,echo=FALSE}
+## plot by month
+ggplot(NULL, aes(x = month, y = month_rating))+
+  geom_point(data=reviews.product, aes(color = "monthly ave rating"), alpha = 0.7,size=0.2)+
+  geom_smooth(data=reviews.product,method = 'auto',aes(color='monthly ave rating line'),size=1,alpha = 0.6)+
+  theme_minimal()+
+  facet_grid(rows=vars(product_cat))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  labs(x='day',y='mean rating',fill='category',title='Product Category Mean Rating by Month')
+```
+
+
+## Plot rating distribution by proportion
+
+### Rating proportion in a day
+```{r,echo=FALSE}
+## percentage of rating vs. week
+ggplot(data=reviews.product, aes(date))+
+  geom_bar(aes(fill=as.factor(rating)), position="fill")+
+  facet_grid(rows=vars(product_cat))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  scale_fill_brewer(palette="RdBu")+
+  ylab('proportion')
+```
+
+### Rating proportion in a week
+```{r,echo=FALSE}
+## percentage of rating vs. week
+ggplot(data=reviews.product, aes(week))+
+  geom_bar(aes(fill=as.factor(rating)), position="fill")+
+  facet_grid(rows=vars(product_cat))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  scale_fill_brewer(palette="RdBu")+
+  ylab('proportion')
+```
+
+### Rating proportion in a month
+```{r,echo=FALSE}
+## percentage of rating vs. week
+ggplot(data=reviews.product, aes(month))+
+  geom_bar(aes(fill=as.factor(rating)), position="fill")+
+  facet_grid(rows=vars(product_cat))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  scale_fill_brewer(palette="RdBu")+
+  ylab('proportion')
+```
+
+
+## Plot rating distribution by count
+
+### Rating count in a day
+```{r,echo=FALSE}
+ggplot(reviews.product, aes(date, fill=as.factor(rating)))+
+  geom_bar()+
+  facet_grid(rows=vars(product_cat))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  scale_fill_brewer(palette="RdBu")
+```
+
+### Rating count in a week
+```{r,echo=FALSE}
+ggplot(reviews.product, aes(week, fill=as.factor(rating)))+
+  geom_bar()+
+  facet_grid(rows=vars(product_cat))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  scale_fill_brewer(palette="RdBu")
+```
+
+### Rating count in a month
+```{r,echo=FALSE}
+ggplot(reviews.product, aes(month, fill=as.factor(rating)))+
+  geom_bar()+
+  facet_grid(rows=vars(product_cat))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  scale_fill_brewer(palette="RdBu")
+```
+
+
+# Time Data vs. Review Length
+
+## Plot rating distribution by proportion
+
+### Rating proportion in a day
+```{r,echo=FALSE}
+ggplot(data=reviews.product, aes(date))+
+  geom_bar(aes(fill=word_count.binned), position="fill")+
+  facet_grid(rows=vars(product_cat))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  scale_fill_brewer(palette="RdBu")+
+  ylab('proportion')
+```
+
+### Rating proportion in a week
+```{r,echo=FALSE}
+## percentage of rating vs. week
+ggplot(data=reviews.product, aes(week))+
+  geom_bar(aes(fill=word_count.binned), position="fill")+
+  facet_grid(rows=vars(product_cat))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  scale_fill_brewer(palette="RdBu")+
+  ylab('proportion')
+```
+
+### Rating proportion in a month
+```{r,echo=FALSE}
+ggplot(data=reviews.product, aes(month))+
+  geom_bar(aes(fill=word_count.binned), position="fill")+
+  facet_grid(rows=vars(product_cat))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  scale_fill_brewer(palette="RdBu")+
+  ylab('proportion')
+```
+
+
+## Plot rating distribution by count
+
+### Rating count in a day
+```{r,echo=FALSE}
+ggplot(reviews.product, aes(date, fill=word_count.binned))+
+  geom_bar()+
+  facet_grid(rows=vars(product_cat))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  scale_fill_brewer(palette="RdBu")
+```
+
+### Rating count in a week
+```{r,echo=FALSE}
+ggplot(reviews.product, aes(week, fill=word_count.binned))+
+  geom_bar()+
+  facet_grid(rows=vars(product_cat))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  scale_fill_brewer(palette="RdBu")
+```
+
+### Rating count in a month
+```{r,echo=FALSE}
+ggplot(reviews.product, aes(month, fill=word_count.binned))+
+  geom_bar()+
+  facet_grid(rows=vars(product_cat))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  scale_fill_brewer(palette="RdBu")
+```
+
+
+

@@ -1,0 +1,236 @@
+---
+title: 'Review Analysis Tests: Review Length Test for Cables with Overvall Stats'
+author: "Eugenie"
+date: "11/11/2019"
+output: 
+  html_document:
+    toc: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load Source File
+
+Data pre-processing is included, where special chars and minimal stop-words are removed.
+```{r echo=T, results='hide', message=F, warning=F}
+library(data.table)
+## load review data
+source("~/Dropbox/Eugenie/scripts/libs.R")
+```
+
+```{r, include=FALSE}
+# Load review data
+reviews3.csv <- read.csv("~/Dropbox/Eugenie/data/processed/merged-reviews.csv")
+reviews3.csv$date <- as.Date(reviews3.csv$date, "%Y-%m-%d")
+# Load new AmazonBasics cable data
+merged_cables <- read.csv("~/Dropbox/Eugenie/data/processed/merged-cables.csv")
+# Load brand data
+cable_brands <- read_excel("~/Dropbox/Eugenie/data/raw/amazon-cables.xlsx")
+```
+
+
+# Data Processing
+
+```{r}
+# Combine the cable datasets
+#reviews3.cables <- reviews3.csv[, !names(reviews3.csv) %in% c("sentiment_cat", "positive", "negative", "neutral", "mixed")]
+#reviews3.csv <- rbind(reviews3.csv, amazon_cables)
+```
+
+```{r, include=FALSE}
+# Drop records before 2013.
+reviews3.csv <- reviews3.csv[as.numeric(as.character(reviews3.csv$year))>2013,]
+# Drop records with no product category.
+reviews3.csv <- reviews3.csv[reviews3.csv$product_cat != 'none',]
+# Get selected columns for further analysis.
+reviews.product <- reviews3.csv[,c('recid','item_id','child_id', 'incentivized','product_cat','rating','word_count','helpful_yes','date','year','month','week')]
+```
+
+```{r, include=FALSE}
+# Add 'after_ban' label
+reviews.product['after_ban'] <- ifelse(reviews.product$date>'2016-10-02',1,0)
+reviews.product$after_ban <- as.factor(reviews.product$after_ban)
+levels(reviews.product$after_ban) <- c("before", "after")
+```
+
+# Analyse Amazon Products
+```{r, include=FALSE}
+# Get cables
+cables <- reviews.product[reviews.product$product_cat == "phone_cables",]
+# Get brands
+cables <- merge(cables, cable_brands, by='item_id', all.x=T)
+cables2 <- cables[is.na(cables$brand),]
+# Get brands for child_id
+cables2 <- merge(cables2, cable_brands, by.x = 'child_id', by.y = 'item_id')
+cables <- na.omit(cables)
+# Merge
+#colnames(cables2)[46] <- "brand"
+#cables2 <- cables2[,names(cables)]
+cables2 <- cables2[,c('recid','item_id','child_id', 'incentivized','product_cat','rating','word_count','helpful_yes','date','year','month','week','after_ban','brand.y')]
+names(cables2) <- c('recid','item_id','child_id', 'incentivized','product_cat','rating','word_count','helpful_yes','date','year','month','week','after_ban','brand')
+cables <- rbind(cables, cables2)
+```
+
+```{r, include=FALSE}
+cables["brand.sim"] <- ifelse(cables$brand %in% c('AmazonBasics'), "AmazonBasics", 
+                              ifelse(cables$brand %in% c('Anker'), "Anker", 
+                                     ifelse(cables$brand %in% c('RAMPOW'), "RAMPOW", "other")))
+#merged_cables["Amazon"] <- ifelse(merged_cables$brand == "AmazonBasics", 1, 0)
+#merged_cables["Anker"] <- ifelse(merged_cables$brand == "Anker", 1, 0)
+#merged_cables["RAMPOW"] <- ifelse(merged_cables$brand == "RAMPOW", 1, 0)
+#merged_cables["other"] <- ifelse(!merged_cables$brand %in% c("AmazonBasics", "RAMPOW", "Anker"), 1, 0)
+#write.csv(reviews.product, file = "processed-cables.csv",row.names=FALSE)
+```
+
+## Percentage of incentivized reviews
+```{r,echo=FALSE}
+## get the percentage of each group
+cable.summary <- data.frame(table(cables[,c('incentivized')]))
+cable.summary <- ddply(cable.summary, .(), mutate, Freq_pct = Freq/sum(Freq)*100)
+knitr::kable(cable.summary)
+```
+
+```{r,echo=FALSE}
+## get the percentage of each group
+cable.summary <- data.frame(table(cables[,c('incentivized','brand.sim')]))
+cable.summary <- ddply(cable.summary, .(brand.sim), mutate, Freq_pct = Freq/sum(Freq)*100)
+knitr::kable(cable.summary)
+```
+
+```{r,echo=FALSE}
+## get the percentage of each group
+cable.summary <- data.frame(table(cables[,c('incentivized','brand.sim','after_ban')]))
+cable.summary <- ddply(cable.summary, .(after_ban), mutate, Freq_pct = Freq/sum(Freq)*100)
+
+## cast for readibility
+knitr::kable(cast(cable.summary, incentivized~brand.sim~after_ban, mean, value = 'Freq'))
+```
+
+```{r, include=FALSE}
+reviews.product <- cables
+```
+
+# Analysis Test: Average Review Length
+Once we have the word count distribution of the product and the expected distribution of the category we compare the two distributions and identify product word count groups that are higher in concentration than we’d expect to see.
+
+## Data Processing
+
+Get mean, variance, and standard deviation of the number of reviews per day by item.
+```{r, include=FALSE}
+reviews.length <- reviews.product[reviews.product$after_ban == "before",] %>%
+  #group_by(brand.sim) %>%
+  mutate(sd = sd(word_count)) %>%
+  mutate(variance = var(word_count)) %>%
+  mutate(mean = mean(word_count))
+
+#reviews.length <- reviews.length[,c('brand.sim', "sd", "variance", "mean")] %>% distinct()
+reviews.length <- reviews.length[,c("sd", "variance", "mean")] %>% distinct()
+```
+
+Compute stds
+```{r,echo=FALSE}
+reviews.length <- reviews.length %>%
+  #group_by(brand.sim) %>%
+  mutate(threshold_2sd = mean+2*sd) %>%
+  mutate(threshold_3sd = mean+3*sd)
+```
+
+Label pass/fail tests
+```{r,echo=FALSE}
+#reviews.product <- merge(reviews.product, reviews.length, by = 'brand.sim')
+reviews.product <- merge(reviews.product, reviews.length)
+reviews.product['word_count.2sd'] <- ifelse(reviews.product$word_count>reviews.product$threshold_2sd, 'fail', 'pass')
+reviews.product['word_count.3sd'] <- ifelse(reviews.product$word_count>reviews.product$threshold_3sd, 'fail', 'pass')
+```
+
+
+## Result Analysis
+
+### Two standard deviations away
+
+```{r,echo=FALSE}
+temp <- data.frame(table(reviews.product[,c('brand.sim','after_ban','word_count.2sd')]))
+temp<-temp[!(temp$brand.sim=="none"),]
+temp$word_count.2sd <- paste0(temp$after_ban,'_',temp$word_count.2sd)
+temp <- temp[,c('brand.sim','word_count.2sd','Freq')]
+#knitr::kable(ddply(temp, .(word_count.2sd), mutate, Freq_pct = Freq/sum(Freq)*100))
+```
+
+```{r,echo=FALSE}
+table.length <- reshape(temp, idvar = "brand.sim", timevar = c('word_count.2sd'), direction = "wide")
+
+temp <- reviews.length[,c('mean','variance','sd','threshold_2sd')] %>% distinct()
+
+table.length <- table.length %>%
+  group_by(brand.sim) %>%
+  mutate(Before.fail.pct = Freq.before_fail/(Freq.before_pass+Freq.before_fail)*100) %>%
+  mutate(After.fail.pct = Freq.after_fail/(Freq.after_pass+Freq.after_fail)*100)
+
+table.length <- merge(table.length, temp)
+knitr::kable(table.length)
+```
+
+Mean review rating for over vs. under length threshold for the number of reviews.
+
+```{r,echo=FALSE}
+product.avg <- aggregate(reviews.product[, 'rating'], list(reviews.product$brand.sim,reviews.product$word_count.2sd), mean)
+names(product.avg) <- c('brand.sim','reviews.count','avg.rating')
+product.avg <- reshape(product.avg, idvar = 'brand.sim',timevar = 'reviews.count', direction = 'wide')
+knitr::kable(product.avg)
+```
+
+Review distribution between groups.
+```{r,echo=FALSE}
+ggplot(data=reviews.product, aes(word_count.2sd))+
+  geom_bar(aes(fill=as.factor(rating)), position="fill")+
+  scale_fill_brewer(palette="RdBu", name='rating')+
+  facet_grid(~brand.sim)+
+  ylab('proportion')
+```
+
+
+### Three standard deviations away
+```{r,echo=FALSE}
+temp <- data.frame(table(reviews.product[,c('brand.sim','after_ban','word_count.3sd')]))
+temp<-temp[!(temp$brand.sim=="none"),]
+temp$word_count.3sd <- paste0(temp$after_ban,'_',temp$word_count.3sd)
+temp <- temp[,c('brand.sim','word_count.3sd','Freq')]
+#knitr::kable(ddply(temp, .(word_count.3sd), mutate, Freq_pct = Freq/sum(Freq)*100))
+```
+
+```{r,echo=FALSE}
+table.length <- reshape(temp, idvar = "brand.sim", timevar = c('word_count.3sd'), direction = "wide")
+
+temp <- reviews.product[,c('brand.sim','mean','variance','sd','threshold_3sd')] %>% distinct()
+
+table.length <- table.length %>%
+  group_by(brand.sim) %>%
+  mutate(Before.fail.pct = Freq.before_fail/(Freq.before_pass+Freq.before_fail)*100) %>%
+  mutate(After.fail.pct = Freq.after_fail/(Freq.after_pass+Freq.after_fail)*100)
+
+table.length <- merge(table.length, temp, by = 'brand.sim')
+knitr::kable(table.length)
+```
+
+Mean review rating for over vs. under length threshold for the number of reviews.
+
+```{r,echo=FALSE}
+product.avg <- aggregate(reviews.product[, 'rating'], list(reviews.product$brand.sim,reviews.product$word_count.3sd), mean)
+names(product.avg) <- c('brand.sim','reviews.count','avg.rating')
+product.avg <- reshape(product.avg, idvar = 'brand.sim',timevar = 'reviews.count', direction = 'wide')
+knitr::kable(product.avg)
+```
+
+Review distribution between groups.
+
+```{r,echo=FALSE}
+ggplot(data=reviews.product, aes(word_count.3sd))+
+  geom_bar(aes(fill=as.factor(rating)), position="fill")+
+  scale_fill_brewer(palette="RdBu", name='rating')+
+  facet_grid(~brand.sim)+
+  ylab('proportion')
+```
+

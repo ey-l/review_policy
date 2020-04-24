@@ -1,0 +1,59 @@
+---
+title: "Patio and Garden dataset analysis"
+author: "Eugenie"
+date: "20/03/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load Files
+
+Data pre-processing is included, where special chars and minimal stop-words are removed.
+```{r echo=T, results='hide', message=F, warning=F}
+library(data.table)
+## load review data
+source("~/Dropbox/Eugenie/scripts/libs.R")
+```
+
+```{r, include=FALSE}
+# Load review data
+reviews.csv <- read.csv("~/Dropbox/Eugenie/data/processed_julian_amazon_data/Patio_Lawn_and_Garden_merged_reviews_tagged.csv")
+#reviews_sports.csv <- read.csv("~/Dropbox/Eugenie/data/processed_julian_amazon_data/Sports_and_Outdoors_merged_reviews_tagged.csv")
+#reviews.csv$date <- as.Date(reviews.csv$date, "%Y-%m-%d")
+```
+
+# Check for duplicates
+
+- Overall, there are 1014250 reviews in the original 'Patio_Lawn_and_Garden' dataset.
+- There are 892647 reviews after removing rows with identical values.
+
+```{r}
+# Duplicate reviewerID
+dup_reviews <- reviews.csv[duplicated(reviews.csv$reviewerID)|duplicated(reviews.csv$reviewerID, fromLast=TRUE),]
+```
+
+```{r}
+# Drop reviews with the same reviewerID and asin
+reviews1 <- reviews.csv %>% distinct(reviewerID, asin, .keep_all = TRUE)
+```
+
+```{r}
+# Duplicate reviewerID in the dataset with duplicates removed
+# These are the reviews from the same reviewerID but for different products
+dup_reviews1 <- reviews1[duplicated(reviews1$reviewerID)|duplicated(reviews1$reviewerID, fromLast=TRUE),]
+```
+
+```{r}
+# The reviewText from a reviewerID is different for different products
+distinct_text <- dup_reviews1 %>% distinct(reviewerID, reviewText, .keep_all = TRUE)
+#dup_text <- setDT(dup_reviews1)[!distinct_text, on="X"]
+```
+
+```{r}
+# The reviewText is the same from a reviewerID for different products
+dup_text <- reviews1[duplicated(reviews1[c('reviewerID','reviewText')]),]
+```
+

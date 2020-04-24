@@ -1,0 +1,164 @@
+---
+title: "Sentiment Analysis on Review Text by Sentence"
+author: "Eugenie"
+date: "16/07/2019"
+output: 
+  html_document:
+    toc: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load Source File
+Data pre-processing is included, where special chars and minimal stop-words are removed
+```{r, include=FALSE}
+source("~/Dropbox/Eugenie/scripts/utils.R")
+```
+
+
+# Sentiment Analysis by Sentence Using 'sentimentr' Package
+Get relevant columns
+```{r}
+cols <- c('recid', 'item_id', 'user_id', 'text')
+reviews2.text <- as.data.frame(reviews2.csv[, cols])
+```
+
+The code block to compute the sentiment score at the sentence level. Not executing it because it takes around 10 minutes to generate the sentiment score for each sentence of a review.
+
+The sentiment score is generated using the sentimentr package.
+```{r}
+## get sentiment by sentence using sentimentr package
+# reviews_sentences <- reviews2.text %>%
+#   get_sentences(text) %>%
+#   mutate(sentence_sentiment = sentimentr::sentiment(text)$sentiment)
+```
+
+Load the pre-computed sentiment score by sentence
+```{r}
+## read the sentiment analysis result (using sentimentr package)
+reviews_sentences <- read.csv('~/Dropbox/Eugenie/data/processed/reviews_sentences.csv')
+```
+
+## Sentiment Analysis with the Mean of Sentences
+Get sentiment by reviews by taking the mean of sentences
+```{r}
+sentiment_reviews_sentence.mean <- reviews_sentences %>%
+  group_by(recid) %>%
+  summarize(sentiment_mean = mean(sentence_sentiment),
+            sentence_count = n()) %>%
+  ungroup()
+```
+
+Join the mean sentiment score with other selected columns
+```{r}
+cols <- c('recid','item_id','rating','helpful_yes','helpful_total',
+          'image_count','word_count','brand_repeat',
+          'incentivized','is_deleted','verified_purchaser')
+reviews2.text <- reviews2.csv[,cols]
+reviews2.text <- merge(reviews2.text, sentiment_reviews_sentence.mean, by='recid')
+```
+
+### Summary stats checks
+```{r}
+reviews2.text[, c('incentivized','sentiment_mean')] %>%
+  group_by(incentivized) %>%
+  summarize_all(mean, na.rm = TRUE)
+```
+Note: The incentivized sentiment mean is lower, suprisingly. However, the 'sentimentr' package is not perfect either. 
+
+For example, here is an incentivized review with negative mean sentiment score, yet the content is relatively positive.
+```{r}
+knitr::kable(reviews_sentences[reviews_sentences$recid=='100125154',c('text','sentence_sentiment')],
+             caption = "An Example of Incentivized Review with Positive Content but Negative Sentiment Score", floating.environment="sidewaystable")
+```
+
+As we see, there's quite a variation in the sentence sentiment in this particular case. Would this be an example for further analysis on the extreme variance within each review? 
+
+But it's also foreseeable that the variation within non-incentivized reviews would be less prounounced since they're a lot shorter.
+
+### Plots
+Boxplot: rating vs. sentence_sentiment
+```{r, echo=FALSE}
+plot_ly(reviews2.text, x = ~as.factor(rating), y = ~sentiment_mean, type = 'box',
+        marker = list(color = 'rgb(8,81,156)',
+                      outliercolor = 'rgba(219, 64, 82, 0.6)',
+                      line = list(outliercolor = 'rgba(219, 64, 82, 1.0)',
+                                  outlierwidth = 2)),
+        line = list(color = 'rgb(8,81,156)')) %>%
+  layout(xaxis = list(title=""))
+```
+
+### Fixed Effect Linear Model
+```{r}
+## fix effect linear model
+## Use sentence sentiment score to replce rating
+formula.fe <- sentiment_mean ~ incentivized + is_deleted + verified_purchaser
+model.fe <- plm(data = reviews2.text, formula = formula.fe, index = c('item_id'), model = 'within')
+# get the model summary
+summary(model.fe)
+```
+
+### Correlation: rating vs. review sentiment
+```{r}
+cor.test(reviews2.text$rating, reviews2.text$sentiment_mean, method=c("pearson", "kendall", "spearman"))
+```
+
+
+
+## Sentiment Analysis with the Sum of Sentences (out of Curiosity)
+Get sentiment by reviews by taking the sum of sentences
+```{r}
+sentiment_reviews_sentence.sum <- reviews_sentences %>%
+  group_by(recid) %>%
+  summarize(sentiment_sum = sum(sentence_sentiment)) %>%
+  ungroup()
+```
+
+Join the mean sentiment score with other selected columns
+```{r}
+reviews2.text <- merge(reviews2.text, sentiment_reviews_sentence.sum, by='recid')
+```
+
+### Summary stats checks
+```{r}
+reviews2.text[, c('incentivized','sentiment_sum')] %>%
+  group_by(incentivized) %>%
+  summarize_all(mean, na.rm = TRUE)
+```
+Note: The incentivized review sentiment sum is a lot higher than the non-incentivized group. Going back to the suprising finding in section 2.1.1, combined with our previous finding that incentivized reviews could be a lot longer than non-incentivized ones, the higher sum could be explained.
+
+### Plots
+Boxplot: rating vs. sentence_sentiment
+```{r, echo=FALSE}
+plot_ly(reviews2.text, x = ~as.factor(rating), y = ~sentiment_sum, type = 'box',
+        marker = list(color = 'rgb(8,81,156)',
+                      outliercolor = 'rgba(219, 64, 82, 0.6)',
+                      line = list(outliercolor = 'rgba(219, 64, 82, 1.0)',
+                                  outlierwidth = 2)),
+        line = list(color = 'rgb(8,81,156)')) %>%
+  layout(xaxis = list(title=""))
+```
+
+### Fixed Effect Linear Model
+```{r}
+## fix effect linear model
+## Use sentence sentiment score to replce rating
+formula.fe <- sentiment_sum ~ incentivized + is_deleted + verified_purchaser
+model.fe <- plm(data = reviews2.text, formula = formula.fe, index = c('item_id'), model = 'within')
+# get the model summary
+summary(model.fe)
+```
+
+### Correlation: rating vs. review sentiment
+```{r}
+cor.test(reviews2.text$rating, reviews2.text$sentiment_sum, method=c("pearson", "kendall", "spearman"))
+```
+Although it's still significant, the mean sentiment score shows a stronger correlation with ratings.
+
+
+
+
+

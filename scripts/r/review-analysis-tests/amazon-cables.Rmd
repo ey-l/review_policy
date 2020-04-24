@@ -1,0 +1,491 @@
+---
+title: 'Review Analysis Tests: Tables on Review Length Test and Review Count Test by Product'
+author: "Eugenie"
+date: "02/11/2019"
+output: 
+  html_document:
+    toc: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load Source File
+
+Data pre-processing is included, where special chars and minimal stop-words are removed.
+```{r echo=T, results='hide', message=F, warning=F}
+library(data.table)
+## load review data
+source("~/Dropbox/Eugenie/scripts/libs.R")
+```
+
+```{r, include=FALSE}
+# Load review data
+reviews3.csv <- read.csv("~/Dropbox/Eugenie/data/processed_reviewMeta/merged-reviews.csv")
+reviews3.csv$date <- as.Date(reviews3.csv$date, "%Y-%m-%d")
+# Load brand data
+cable_brands <- read_excel("~/Dropbox/Eugenie/data/ReviewMeta_Amazon_Data/amazon-cables.xlsx")
+```
+
+
+# Data Processing
+
+```{r, include=FALSE}
+# Drop records before 2013.
+reviews3.csv <- reviews3.csv[as.numeric(as.character(reviews3.csv$year))>2013,]
+# Drop records with no product category.
+reviews3.csv <- reviews3.csv[reviews3.csv$product_cat != 'none',]
+# Get selected columns for further analysis.
+reviews.product <- reviews3.csv[,c('recid','item_id','child_id', 'incentivized','product_cat','rating','word_count','helpful_yes','date','year','month','week')]
+```
+
+```{r, include=FALSE}
+# Add 'after_ban' label
+reviews.product['after_ban'] <- ifelse(reviews.product$date>'2016-10-02',1,0)
+reviews.product$after_ban <- as.factor(reviews.product$after_ban)
+levels(reviews.product$after_ban) <- c("before", "after")
+```
+
+# Analyse Amazon Products
+```{r, include=FALSE}
+# Get cables
+cables <- reviews.product[reviews.product$product_cat == "phone_cables",]
+# Get brands
+cables <- merge(cables, cable_brands, by='item_id', all.x=T)
+cables2 <- cables[is.na(cables$brand),]
+# Get brands for child_id
+cables2 <- merge(cables2, cable_brands, by.x = 'child_id', by.y = 'item_id')
+cables <- na.omit(cables)
+# Merge
+cables2 <- cables2[,c('recid','item_id','child_id', 'incentivized','product_cat','rating','word_count','helpful_yes','date','year','month','week','after_ban','brand.y')]
+names(cables2) <- c('recid','item_id','child_id', 'incentivized','product_cat','rating','word_count','helpful_yes','date','year','month','week','after_ban','brand')
+cables <- rbind(cables, cables2)
+```
+
+## Review count of each brand in the dataset.
+```{r, echo=FALSE}
+ggplot(cables, aes(brand)) + geom_bar()
+```
+
+```{r, echo=FALSE}
+cable.review_count <- cables %>%
+  group_by(brand) %>%
+  summarise(count = n())
+knitr::kable(cable.review_count)
+```
+
+```{r, include=FALSE}
+cables["brand.sim"] <- ifelse(cables$brand %in% c('AmazonBasics'), "AmazonBasics", 
+                              ifelse(cables$brand %in% c('Anker'), "Anker", 
+                                     ifelse(cables$brand %in% c('RAMPOW'), "RAMPOW", "other")))
+```
+
+```{r, echo=FALSE}
+cable.review_count <- cables %>%
+  group_by(brand.sim) %>%
+  summarise(count = n()) %>%
+  mutate(pct = count / sum(count) * 100)
+knitr::kable(cable.review_count)
+```
+
+## Daily review count distribution
+```{r, echo=FALSE}
+cable_counts <- cables %>%
+  group_by(item_id) %>%
+  summarise(count = n())
+# Get count of reviews
+cable_brands <- merge(cable_brands, cable_counts)
+```
+
+### All AmazonBasics & all others
+
+Total reviews of AmazonBasics cables
+
+```{r, echo=FALSE}
+ggplot(cables[cables$brand.sim=='AmazonBasics',], aes(date))+
+  geom_bar()+
+  #facet_grid(rows=vars(brand.sim))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "red", size=0.3)
+```
+
+Total reviews of Anker cables
+
+```{r, echo=FALSE}
+ggplot(cables[cables$brand.sim=='Anker',], aes(date))+
+  geom_bar()+
+  #facet_grid(rows=vars(brand.sim))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "red", size=0.3)
+```
+
+Total reviews of RAMPOW cables
+
+```{r, echo=FALSE}
+ggplot(cables[cables$brand.sim=='RAMPOW',], aes(date))+
+  geom_bar()+
+  #facet_grid(rows=vars(brand.sim))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "red", size=0.3)
+```
+
+Total reviews of other cables
+
+```{r, echo=FALSE}
+ggplot(cables[cables$brand.sim=='other',], aes(date))+
+  geom_bar()+
+  #facet_grid(rows=vars(brand.sim))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "red", size=0.3)
+```
+
+## Percentage of incentivized reviews
+```{r,echo=FALSE}
+## get the percentage of each group
+cable.summary <- data.frame(table(cables[,c('incentivized')]))
+cable.summary <- ddply(cable.summary, .(), mutate, Freq_pct = Freq/sum(Freq)*100)
+knitr::kable(cable.summary)
+```
+
+```{r,echo=FALSE}
+## get the percentage of each group
+cable.summary <- data.frame(table(cables[,c('incentivized','brand.sim')]))
+cable.summary <- ddply(cable.summary, .(), mutate, Freq_pct = Freq/sum(Freq)*100)
+knitr::kable(cable.summary)
+```
+
+```{r,echo=FALSE}
+## get the percentage of each group
+cable.summary <- data.frame(table(cables[,c('incentivized','brand.sim','after_ban')]))
+cable.summary <- ddply(cable.summary, .(after_ban), mutate, Freq_pct = Freq/sum(Freq)*100)
+
+## cast for readibility
+knitr::kable(cast(cable.summary, incentivized~brand.sim~after_ban, mean, value = 'Freq'))
+```
+
+## Week-level review count
+
+```{r, include=FALSE}
+reviews.product <- cables
+```
+
+# Analysis Test: Daily Average Review Count
+
+## Data Processing
+```{r, include=FALSE}
+# Get the daily number of reviews per item.
+reviews.daily <- reviews.product %>%
+  group_by(brand.sim, date) %>%
+  summarise(daily.count = n())
+
+time.diff <- reviews.product[,c('brand.sim','date')] %>%
+  group_by(brand.sim) %>%
+  mutate(first_review.date = min(date)) %>%
+  mutate(last_review.date = max(date))
+
+time.diff <- time.diff[,c('brand.sim','first_review.date','last_review.date')] %>%
+  distinct()
+
+reviews.first_last_date <- time.diff
+
+## creating dates based on the first and last review per item
+time.diff <- setDT(time.diff)[, .(date = seq(first_review.date, last_review.date, by = "day")), 
+                              by = brand.sim]
+
+reviews.daily <- merge(time.diff, reviews.daily, by=c('brand.sim','date'), all.x = T)
+reviews.daily[is.na(reviews.daily)] <- 0
+```
+
+```{r, include=FALSE}
+# Get mean, variance, and standard deviation of the number of reviews per day by item.
+reviews.daily_stats <- reviews.daily[reviews.daily$date < "2016-10-04",] %>%
+  group_by(brand.sim) %>%
+  mutate(sd = sd(daily.count)) %>%
+  mutate(variance = var(daily.count)) %>%
+  mutate(mean = mean(daily.count))
+
+reviews.daily_stats <- reviews.daily_stats[,c("brand.sim", "sd", "variance", "mean")] %>% distinct()
+```
+
+```{r, echo=FALSE}
+# Get the number of daily reviews that is 2 and 3 sd's away.
+reviews.daily_stats <- reviews.daily_stats %>%
+  group_by(brand.sim) %>%
+  mutate(threshold_3sd = mean+3*sd) %>%
+  mutate(threshold_2sd = mean+2*sd)
+
+reviews.daily <- merge(reviews.daily, reviews.daily_stats, by = 'brand.sim')
+knitr::kable(reviews.daily_stats)
+#write.csv(reviews.daily, file = "reviews3-count-test-stats.csv",row.names=FALSE)
+#reviews.daily['threshold.ceil'] <- ceiling(reviews.daily$threshold)
+```
+
+```{r, include=FALSE}
+# Get the brand.sim and days where the number of daily reviews is above the threshold.
+reviews.over_2sd <- reviews.daily[reviews.daily$daily.count>reviews.daily$threshold_2sd,]
+reviews.over_3sd <- reviews.daily[reviews.daily$daily.count>reviews.daily$threshold_3sd,]
+
+reviews.over_2sd <- reviews.over_2sd %>%
+  group_by(brand.sim) %>%
+  mutate(num.days=n())
+reviews.over_3sd <- reviews.over_3sd %>%
+  group_by(brand.sim) %>%
+  mutate(num.days=n())
+```
+
+```{r, include=FALSE}
+# Join results with initial data frame.
+reviews.over_2sd['review_count.2sd'] <- 1
+reviews.over_3sd['review_count.3sd'] <- 1
+
+reviews.product <- merge(reviews.product, reviews.over_2sd[,c('brand.sim','date','review_count.2sd')],
+                         by=c('brand.sim','date'), all.x = T)
+reviews.product <- merge(reviews.product, reviews.over_3sd[,c('brand.sim','date','review_count.3sd')],
+                         by=c('brand.sim','date'), all.x = T)
+
+reviews.product[is.na(reviews.product)] <- 0
+
+reviews.product$review_count.2sd <- as.factor(reviews.product$review_count.2sd)
+levels(reviews.product$review_count.2sd) <- c("pass", "fail")
+reviews.product$review_count.3sd <- as.factor(reviews.product$review_count.3sd)
+levels(reviews.product$review_count.3sd) <- c("pass", "fail")
+```
+
+```{r,echo=FALSE}
+# Join review.daily statistics and review.product
+reviews.count <- merge(reviews.product, reviews.daily_stats, by = 'brand.sim')
+```
+
+
+## Result Analysis
+
+### Two standard deviations away
+
+```{r,echo=FALSE}
+temp <- data.frame(table(reviews.product[,c('brand.sim','after_ban','review_count.2sd')]))
+temp<-temp[!(temp$brand.sim=="none"),]
+temp$review_count.2sd <- paste0(temp$after_ban,'_',temp$review_count.2sd)
+temp <- temp[,c('brand.sim','review_count.2sd','Freq')]
+#knitr::kable(ddply(temp, .(review_count.2sd), mutate, Freq_pct = Freq/sum(Freq)*100))
+```
+
+```{r,echo=FALSE}
+table.length <- reshape(temp, idvar = "brand.sim", timevar = c('review_count.2sd'), direction = "wide")
+
+table.length <- table.length %>%
+  group_by(brand.sim) %>%
+  mutate(Before.fail.pct = Freq.before_fail/(Freq.before_pass+Freq.before_fail)*100) %>%
+  mutate(After.fail.pct = Freq.after_fail/(Freq.after_pass+Freq.after_fail)*100)
+
+knitr::kable(table.length)
+```
+
+Mean review rating for over vs. under daily threshold for the number of reviews.
+
+```{r,echo=FALSE}
+product.avg <- aggregate(reviews.product[, 'rating'], list(reviews.product$brand.sim,reviews.product$review_count.2sd), mean)
+names(product.avg) <- c('brand.sim','reviews.count','avg.rating')
+product.avg <- reshape(product.avg, idvar = 'brand.sim',timevar = 'reviews.count', direction = 'wide')
+knitr::kable(product.avg)
+```
+
+Review distribution between groups.
+
+```{r,echo=FALSE}
+ggplot(data=reviews.product, aes(review_count.2sd))+
+  geom_bar(aes(fill=as.factor(rating)), position="fill")+
+  scale_fill_brewer(palette="RdBu", name='rating')+
+  facet_grid(~brand.sim)+
+  ylab('proportion')
+```
+
+Linear Regression with Fixed Effect on Item ID
+
+```{r, include=FALSE}
+formula.fe <- rating ~ review_count.2sd
+```
+
+```{r, results='asis', echo=FALSE}
+# in model.fe, index = c('brand.sim') defines 'brand.sim' as the entity
+model.fe <- plm(data = reviews.product, formula = formula.fe, index = c('brand.sim'), model = 'within')
+
+# get the model summary
+stargazer(model.fe,title='Linear Regression with Fixed Effect: Daily Review Count', 
+          align=TRUE, type = 'html')
+```
+From the result of the linear fixed effect modelling, the null hypothesis of the independency of products is rejected. 
+
+### Three standard deviations away
+
+```{r,echo=FALSE}
+temp <- data.frame(table(reviews.product[,c('brand.sim','after_ban','review_count.3sd')]))
+temp<-temp[!(temp$brand.sim=="none"),]
+temp$review_count.3sd <- paste0(temp$after_ban,'_',temp$review_count.3sd)
+temp <- temp[,c('brand.sim','review_count.3sd','Freq')]
+#knitr::kable(ddply(temp, .(review_count.2sd), mutate, Freq_pct = Freq/sum(Freq)*100))
+```
+
+```{r,echo=FALSE}
+table.length <- reshape(temp, idvar = "brand.sim", timevar = c('review_count.3sd'), direction = "wide")
+
+table.length <- table.length %>%
+  group_by(brand.sim) %>%
+  mutate(Before.fail.pct = Freq.before_fail/(Freq.before_pass+Freq.before_fail)*100) %>%
+  mutate(After.fail.pct = Freq.after_fail/(Freq.after_pass+Freq.after_fail)*100)
+
+knitr::kable(table.length)
+```
+
+Mean review rating for over vs. under daily threshold for the number of reviews.
+
+```{r,echo=FALSE}
+product.avg <- aggregate(reviews.product[, 'rating'], list(reviews.product$brand.sim,reviews.product$review_count.3sd), mean)
+names(product.avg) <- c('brand.sim','reviews.count','avg.rating')
+product.avg <- reshape(product.avg, idvar = 'brand.sim',timevar = 'reviews.count', direction = 'wide')
+knitr::kable(product.avg)
+```
+
+Review distribution between groups.
+
+```{r,echo=FALSE}
+ggplot(data=reviews.product, aes(review_count.3sd))+
+  geom_bar(aes(fill=as.factor(rating)), position="fill")+
+  scale_fill_brewer(palette="RdBu", name='rating')+
+  facet_grid(~brand.sim)+
+  ylab('proportion')
+```
+
+Linear Regression with Fixed Effect on Item ID
+
+```{r, include=FALSE}
+formula.fe <- rating ~ review_count.3sd
+```
+
+```{r, results='asis', echo=FALSE}
+# in model.fe, index = c('brand.sim') defines 'brand.sim' as the entity
+model.fe <- plm(data = reviews.product, formula = formula.fe, index = c('brand.sim'), model = 'within')
+
+# get the model summary
+stargazer(model.fe,title='Linear Regression with Fixed Effect: Daily Review Count', 
+          align=TRUE, type = 'html')
+```
+From the result of the linear fixed effect modelling, the null hypothesis of the independency of products is rejected. 
+
+
+# Analysis Test: Average Review Length
+Once we have the word count distribution of the product and the expected distribution of the category we compare the two distributions and identify product word count groups that are higher in concentration than we’d expect to see.
+
+## Data Processing
+
+Get mean, variance, and standard deviation of the number of reviews per day by item.
+```{r, include=FALSE}
+reviews.length <- reviews.product[reviews.product$after_ban == "before",] %>%
+  group_by(brand.sim) %>%
+  mutate(sd = sd(word_count)) %>%
+  mutate(variance = var(word_count)) %>%
+  mutate(mean = mean(word_count))
+
+reviews.length <- reviews.length[,c("brand.sim", "sd", "variance", "mean")] %>% distinct()
+```
+
+Compute stds
+```{r,echo=FALSE}
+reviews.length <- reviews.length %>%
+  group_by(brand.sim) %>%
+  mutate(threshold_2sd = mean+2*sd) %>%
+  mutate(threshold_3sd = mean+3*sd)
+```
+
+Label pass/fail tests
+```{r,echo=FALSE}
+reviews.product <- merge(reviews.product, reviews.length, by = 'brand.sim')
+reviews.product['word_count.2sd'] <- ifelse(reviews.product$word_count>reviews.product$threshold_2sd, 'fail', 'pass')
+reviews.product['word_count.3sd'] <- ifelse(reviews.product$word_count>reviews.product$threshold_3sd, 'fail', 'pass')
+```
+
+
+## Result Analysis
+
+### Two standard deviations away
+
+```{r,echo=FALSE}
+temp <- data.frame(table(reviews.product[,c('brand.sim','after_ban','word_count.2sd')]))
+temp<-temp[!(temp$brand.sim=="none"),]
+temp$word_count.2sd <- paste0(temp$after_ban,'_',temp$word_count.2sd)
+temp <- temp[,c('brand.sim','word_count.2sd','Freq')]
+#knitr::kable(ddply(temp, .(word_count.2sd), mutate, Freq_pct = Freq/sum(Freq)*100))
+```
+
+```{r,echo=FALSE}
+table.length <- reshape(temp, idvar = "brand.sim", timevar = c('word_count.2sd'), direction = "wide")
+
+temp <- reviews.length[,c('brand.sim','mean','variance','sd','threshold_2sd')] %>% distinct()
+
+table.length <- table.length %>%
+  group_by(brand.sim) %>%
+  mutate(Before.fail.pct = Freq.before_fail/(Freq.before_pass+Freq.before_fail)*100) %>%
+  mutate(After.fail.pct = Freq.after_fail/(Freq.after_pass+Freq.after_fail)*100)
+
+table.length <- merge(table.length, temp, by = 'brand.sim')
+knitr::kable(table.length)
+```
+
+Mean review rating for over vs. under length threshold for the number of reviews.
+
+```{r,echo=FALSE}
+product.avg <- aggregate(reviews.product[, 'rating'], list(reviews.product$brand.sim,reviews.product$word_count.2sd), mean)
+names(product.avg) <- c('brand.sim','reviews.count','avg.rating')
+product.avg <- reshape(product.avg, idvar = 'brand.sim',timevar = 'reviews.count', direction = 'wide')
+knitr::kable(product.avg)
+```
+
+Review distribution between groups.
+```{r,echo=FALSE}
+ggplot(data=reviews.product, aes(word_count.2sd))+
+  geom_bar(aes(fill=as.factor(rating)), position="fill")+
+  scale_fill_brewer(palette="RdBu", name='rating')+
+  facet_grid(~brand.sim)+
+  ylab('proportion')
+```
+
+
+### Three standard deviations away
+```{r,echo=FALSE}
+temp <- data.frame(table(reviews.product[,c('brand.sim','after_ban','word_count.3sd')]))
+temp<-temp[!(temp$brand.sim=="none"),]
+temp$word_count.3sd <- paste0(temp$after_ban,'_',temp$word_count.3sd)
+temp <- temp[,c('brand.sim','word_count.3sd','Freq')]
+#knitr::kable(ddply(temp, .(word_count.3sd), mutate, Freq_pct = Freq/sum(Freq)*100))
+```
+
+```{r,echo=FALSE}
+table.length <- reshape(temp, idvar = "brand.sim", timevar = c('word_count.3sd'), direction = "wide")
+
+temp <- reviews.product[,c('brand.sim','mean','variance','sd','threshold_3sd')] %>% distinct()
+
+table.length <- table.length %>%
+  group_by(brand.sim) %>%
+  mutate(Before.fail.pct = Freq.before_fail/(Freq.before_pass+Freq.before_fail)*100) %>%
+  mutate(After.fail.pct = Freq.after_fail/(Freq.after_pass+Freq.after_fail)*100)
+
+table.length <- merge(table.length, temp, by = 'brand.sim')
+knitr::kable(table.length)
+```
+
+Mean review rating for over vs. under length threshold for the number of reviews.
+
+```{r,echo=FALSE}
+product.avg <- aggregate(reviews.product[, 'rating'], list(reviews.product$brand.sim,reviews.product$word_count.3sd), mean)
+names(product.avg) <- c('brand.sim','reviews.count','avg.rating')
+product.avg <- reshape(product.avg, idvar = 'brand.sim',timevar = 'reviews.count', direction = 'wide')
+knitr::kable(product.avg)
+```
+
+Review distribution between groups.
+
+```{r,echo=FALSE}
+ggplot(data=reviews.product, aes(word_count.3sd))+
+  geom_bar(aes(fill=as.factor(rating)), position="fill")+
+  scale_fill_brewer(palette="RdBu", name='rating')+
+  facet_grid(~brand.sim)+
+  ylab('proportion')
+```
+

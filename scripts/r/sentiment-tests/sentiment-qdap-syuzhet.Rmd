@@ -1,0 +1,293 @@
+---
+title: "Sentiment Analysis with 'qdap' and 'syuzhet' Package"
+author: "Eugenie"
+date: "22/07/2019"
+output: 
+  html_document:
+    toc: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load Source File
+Data pre-processing is included, where special chars and minimal stop-words are removed
+```{r echo=T, results='hide', message=F, warning=F}
+source("~/Dropbox/Eugenie/scripts/utils.R")
+```
+
+Load additional libraries
+```{r echo=T, results='hide', message=F, warning=F}
+## for qdap
+library(rJava)
+library(qdapRegex)
+library(qdapDictionaries)
+library(qdapTools)
+library(qdap)
+
+## for syuzhet
+library(syuzhet)
+```
+
+Get relevant columns
+```{r}
+cols <- c('recid', 'item_id', 'user_id', 'text')
+reviews2.text <- as.data.frame(reviews2.csv[, cols])
+```
+
+# Sentiment Analysis by Sentence Using 'qdap' Package
+## Further Data Pre-Processing with qdap Methods
+Clean text further with qdap methods
+```{r, eval=FALSE, echo=TRUE}
+## text cleanning
+check_text(reviews2.text$text)
+reviews2.text$text <- replace_contraction(reviews2.text$text)
+reviews2.text$text <- replace_number(reviews2.text$text)
+reviews2.text$text <- add_missing_endmark(reviews2.text$text)
+reviews2.text$text <- add_comma_space(reviews2.text$text)
+```
+
+Split each review into sentences. Note that this line took an hour to run on Eugenie's laptop.
+```{r, eval=FALSE, echo=TRUE}
+## takes 1 hour to split sentences
+reviews2.text.qdap <- sentSplit(reviews2.text, "text")
+```
+
+## Compute Polarity
+Compute polarity scores at the sentence level for each review, and transform the result from a list to a data frame.
+```{r, eval=FALSE, echo=TRUE}
+## this particular line takes 3 hours to run
+pol.reviews2.text <- with(reviews2.text.qdap, polarity(text.var = text, grouping.var = recid))
+
+## transfrom data structure for analysis
+qdap.reviews2.text <- colsplit2df(scores(pol.reviews2.text))
+```
+
+Join the scores with more features from the raw data for further analysis
+```{r, eval=FALSE, echo=TRUE}
+qdap.reviews2.text$recid <- as.numeric(qdap.reviews2.text$recid)
+reviews2.csv$recid <- as.numeric(as.character(reviews2.csv$recid))
+qdap.reviews2 <- merge(reviews2.csv[,c('recid','rating','text','incentivized','is_deleted','verified_purchaser')], qdap.reviews2.text, by='recid')
+```
+
+The script above computes the sentiment score at the sentence level for each review. We're not executing it on the fly here because it takes roughly 5 hours in total to generate the result.
+
+Load the pre-computed, joined sentiment score. This is what we would get from executing the script above
+```{r}
+## read the sentiment analysis result (using qdap package)
+qdap.reviews2 <- read.csv('~/Dropbox/Eugenie/data/processed/qdap-reviews2.csv')
+```
+
+## Analysis
+### Summary stats checks
+```{r}
+qdap.reviews2[, c('incentivized','ave.polarity')] %>%
+  group_by(incentivized) %>%
+  summarize_all(mean, na.rm = TRUE)
+```
+This result is different from the one we saw using 'sentimentr' package
+
+```{r}
+## check the records with na values for the ave.polarity
+knitr::kable(qdap.nas <- qdap.reviews2[is.na(qdap.reviews2$ave.polarity),],
+             caption = 'All reviews with NA ave.polarity score', floating.environment="sidewaystable")
+```
+
+There're some NA values for edge cases
+
+
+### Plots
+Boxplot: rating vs. ave.polarity
+```{r, echo=FALSE}
+plot_ly(qdap.reviews2, x = ~as.factor(rating), y = ~ave.polarity, type = 'box',
+        marker = list(color = 'rgb(8,81,156)',
+                      outliercolor = 'rgba(219, 64, 82, 0.6)',
+                      line = list(outliercolor = 'rgba(219, 64, 82, 1.0)',
+                                  outlierwidth = 2)),
+        line = list(color = 'rgb(8,81,156)')) %>%
+  layout(xaxis = list(title=""))
+```
+
+### Fixed Effect Linear Model
+Join with selected columns from the raw data
+```{r}
+qdap.reviews2 <- merge(qdap.reviews2, reviews2.csv[,c('recid','item_id')])
+```
+
+
+```{r}
+## fix effect linear model
+## Use sentence sentiment score to replce rating
+formula.fe <- ave.polarity ~ incentivized + is_deleted + verified_purchaser
+model.fe <- plm(data = qdap.reviews2, formula = formula.fe, index = c('item_id'), model = 'within')
+# get the model summary
+summary(model.fe)
+```
+
+### Correlation: rating vs. review sentiment
+```{r}
+cor.test(qdap.reviews2$rating, qdap.reviews2$ave.polarity, method=c("pearson", "kendall", "spearman"))
+```
+
+
+# Sentiment Analysis by Sentence Using 'syuzhet' Package
+## Compute Polarity
+The script down below executes a lot faster than the methods from 'qdap' package (said by the 'sentimentr' description and seen in this particular example as well). It took Eugenie's laptop around 15 mins in total to execute all four options
+```{r, eval=FALSE, echo=TRUE}
+syuzhet.reviews2 <- reviews2.text[,c('recid','rating','text')] %>%
+  mutate(syuzhet.sentiment = syuzhet::get_sentiment(reviews2.text$text, 'syuzhet')) %>%
+  mutate(afinn.sentiment = syuzhet::get_sentiment(syuzhet.reviews2$text, 'afinn')) %>%
+  mutate(nrc.sentiment = syuzhet::get_sentiment(syuzhet.reviews2$text, 'nrc')) %>%
+  mutate(bing.sentiment = syuzhet::get_sentiment(syuzhet.reviews2$text, 'bing'))
+```
+
+For the sake of time, we're loading the pre-computed results
+```{r}
+syuzhet.reviews2 <- read.csv('~/Dropbox/Eugenie/data/processed/syuzhet-reviews2.csv')
+```
+
+## Analysis
+Here we're showing a brief analysis for all four options
+### Summary stats
+Since 'syuzhet' package utilize four lexicons, we're showing all four summary stats here
+```{r}
+syuzhet.reviews2[, c('incentivized','syuzhet.sentiment')] %>%
+  group_by(incentivized) %>%
+  summarize_all(mean, na.rm = TRUE)
+```
+
+```{r}
+syuzhet.reviews2[, c('incentivized','afinn.sentiment')] %>%
+  group_by(incentivized) %>%
+  summarize_all(mean, na.rm = TRUE)
+```
+
+```{r}
+syuzhet.reviews2[, c('incentivized','nrc.sentiment')] %>%
+  group_by(incentivized) %>%
+  summarize_all(mean, na.rm = TRUE)
+```
+
+```{r}
+syuzhet.reviews2[, c('incentivized','bing.sentiment')] %>%
+  group_by(incentivized) %>%
+  summarize_all(mean, na.rm = TRUE)
+```
+
+All four lexicon options returned the same observation: the incentivized reviews have higher sentiment scores on average than the non-incentivized reviews
+
+This result aligns with what we saw earlier from the 'qdap' package
+
+There's no NA values generated by these methods
+
+
+### Plots
+Boxplot: rating vs. syuzhet.sentiment
+```{r, echo=FALSE}
+plot_ly(syuzhet.reviews2, x = ~as.factor(rating), y = ~syuzhet.sentiment, type = 'box',
+        marker = list(color = 'rgb(8,81,156)',
+                      outliercolor = 'rgba(219, 64, 82, 0.6)',
+                      line = list(outliercolor = 'rgba(219, 64, 82, 1.0)',
+                                  outlierwidth = 2)),
+        line = list(color = 'rgb(8,81,156)')) %>%
+  layout(xaxis = list(title=""))
+```
+
+Boxplot: rating vs. afinn.sentiment
+```{r, echo=FALSE}
+plot_ly(syuzhet.reviews2, x = ~as.factor(rating), y = ~afinn.sentiment, type = 'box',
+        marker = list(color = 'rgb(8,81,156)',
+                      outliercolor = 'rgba(219, 64, 82, 0.6)',
+                      line = list(outliercolor = 'rgba(219, 64, 82, 1.0)',
+                                  outlierwidth = 2)),
+        line = list(color = 'rgb(8,81,156)')) %>%
+  layout(xaxis = list(title=""))
+```
+
+Boxplot: rating vs. nrc.sentiment
+```{r, echo=FALSE}
+plot_ly(syuzhet.reviews2, x = ~as.factor(rating), y = ~nrc.sentiment, type = 'box',
+        marker = list(color = 'rgb(8,81,156)',
+                      outliercolor = 'rgba(219, 64, 82, 0.6)',
+                      line = list(outliercolor = 'rgba(219, 64, 82, 1.0)',
+                                  outlierwidth = 2)),
+        line = list(color = 'rgb(8,81,156)')) %>%
+  layout(xaxis = list(title=""))
+```
+
+Boxplot: rating vs. bing.sentiment
+```{r, echo=FALSE}
+plot_ly(syuzhet.reviews2, x = ~as.factor(rating), y = ~bing.sentiment, type = 'box',
+        marker = list(color = 'rgb(8,81,156)',
+                      outliercolor = 'rgba(219, 64, 82, 0.6)',
+                      line = list(outliercolor = 'rgba(219, 64, 82, 1.0)',
+                                  outlierwidth = 2)),
+        line = list(color = 'rgb(8,81,156)')) %>%
+  layout(xaxis = list(title=""))
+```
+
+### Fixed Effect Linear Model
+Join with selected columns from the raw data
+```{r}
+syuzhet.reviews2 <- merge(syuzhet.reviews2, reviews2.csv[,c('recid','item_id')])
+```
+
+Here we're showing the linear model for all four options
+```{r}
+## fix effect linear model
+## Use sentence sentiment score to replce rating
+formula.fe <- syuzhet.sentiment ~ incentivized + is_deleted + verified_purchaser
+model.fe <- plm(data = syuzhet.reviews2, formula = formula.fe, index = c('item_id'), model = 'within')
+# get the model summary
+summary(model.fe)
+```
+
+```{r}
+## fix effect linear model
+## Use sentence sentiment score to replce rating
+formula.fe <- afinn.sentiment ~ incentivized + is_deleted + verified_purchaser
+model.fe <- plm(data = syuzhet.reviews2, formula = formula.fe, index = c('item_id'), model = 'within')
+# get the model summary
+summary(model.fe)
+```
+
+```{r}
+## fix effect linear model
+## Use sentence sentiment score to replce rating
+formula.fe <- nrc.sentiment ~ incentivized + is_deleted + verified_purchaser
+model.fe <- plm(data = syuzhet.reviews2, formula = formula.fe, index = c('item_id'), model = 'within')
+# get the model summary
+summary(model.fe)
+```
+
+```{r}
+## fix effect linear model
+## Use sentence sentiment score to replce rating
+formula.fe <- bing.sentiment ~ incentivized + is_deleted + verified_purchaser
+model.fe <- plm(data = syuzhet.reviews2, formula = formula.fe, index = c('item_id'), model = 'within')
+# get the model summary
+summary(model.fe)
+```
+
+### Correlation: rating vs. review sentiment
+```{r}
+cor.test(syuzhet.reviews2$rating, syuzhet.reviews2$syuzhet.sentiment, method=c("pearson", "kendall", "spearman"))
+```
+
+```{r}
+cor.test(syuzhet.reviews2$rating, syuzhet.reviews2$afinn.sentiment, method=c("pearson", "kendall", "spearman"))
+```
+
+```{r}
+cor.test(syuzhet.reviews2$rating, syuzhet.reviews2$nrc.sentiment, method=c("pearson", "kendall", "spearman"))
+```
+
+```{r}
+cor.test(syuzhet.reviews2$rating, syuzhet.reviews2$bing.sentiment, method=c("pearson", "kendall", "spearman"))
+```
+
+
+
+

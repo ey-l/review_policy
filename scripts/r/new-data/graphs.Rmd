@@ -1,0 +1,57 @@
+---
+title: "Graphs"
+author: "Eugenie"
+date: "12/12/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, include=FALSE, echo=FALSE}
+#Load libraries
+source("~/Dropbox/Eugenie/scripts/libs.R")
+```
+
+```{r, echo=FALSE}
+# Load review data
+reviews.csv <- read.csv("~/Dropbox/Eugenie/data/processed-new/reviews_merged.csv")
+```
+
+```{r, echo=FALSE}
+# Make a copy
+reviews <- reviews.csv
+```
+
+```{r, echo=FALSE}
+# Count the number of reviews per product
+reviews <- reviews %>% 
+  group_by(asin) %>%
+  mutate(review_num = n())
+```
+
+```{r, echo=FALSE}
+# Get brand and product ids
+brands <- reviews[, c('brand', 'asin')] %>% distinct()
+# Count the number of products a brand owns
+brands_count <- brands %>%
+  group_by(brand) %>%
+  summarise(product_num = n())
+```
+
+# Plot brand vs. the number of products
+```{r, echo=FALSE}
+# Plot brand vs. the number of products
+p <- ggplot(brands_count, aes(x = reorder(brand, -product_num), y = product_num)) + geom_col()
+p + theme(axis.text.x = element_text(angle = 45))
+```
+
+# Plot product rank vs. the number of reviews, labelled with brand
+```{r, echo=FALSE}
+# Plot product rank vs. the number of reviews
+rank_reviews <- reviews[, c('brand', 'asin', 'rank', 'review_num')]
+p <- ggplot(rank_reviews, aes(x = rank, y = review_num)) + geom_point(size = 0.5)
+p + geom_text(aes(label = brand), hjust = 0, vjust = 0, size = 2, angle = 60)
+```
+

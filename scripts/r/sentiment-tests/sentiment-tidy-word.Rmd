@@ -1,0 +1,449 @@
+---
+title: "A Tidy Approach for Sentiment Analysis on Review Text"
+author: "Eugenie"
+date: "10/07/2019"
+output: 
+  html_document:
+    toc: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, include=FALSE}
+########################## load library ############################
+## for data manipulation
+library(plyr)
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(reshape)
+
+## for plotting
+library(ggplot2)
+library(ggmosaic)
+library(plotly)
+library(ggpubr)
+
+## for modelling
+library(plm)
+library(mgcv)
+library(GoodmanKruskal)
+
+## for sentiment analysis
+library(tidytext)
+library(textdata)
+library(gutenbergr)
+library(scales)
+
+```
+
+
+Load data. Please check the file path.
+```{r}
+reviews2.csv <- read.csv('~/Dropbox/Eugenie/data/raw/arslan-reviews2.csv')
+```
+
+Turn numeric values to factors.
+```{r}
+## turn numeric values to factors
+reviews2.csv$is_deleted <- as.factor(reviews2.csv$is_deleted)
+reviews2.csv$incentivized <- as.factor(reviews2.csv$incentivized)
+reviews2.csv$verified_purchaser <- as.factor(reviews2.csv$verified_purchaser)
+
+## change level values
+levels(reviews2.csv$verified_purchaser) <- c("unverified", "verified")
+levels(reviews2.csv$incentivized) <- c("non-incentivized", "incentivized")
+levels(reviews2.csv$is_deleted) <- c("kept", "deleted")
+```
+
+# Data processing
+```{r}
+## get relevant columns
+cols <- c('recid', 'item_id', 'user_id', 'text')
+reviews2.text <- as.data.frame(reviews2.csv[, cols])
+
+## turn numeric values to factors
+reviews2.text$recid <- as.factor(reviews2.text$recid)
+
+## turn factors to char vectors for tidy unnest_tokens
+reviews2.text$text <- as.character(reviews2.text$text)
+
+## get tidy tokens for each review record
+tidy.reviews2.text <- reviews2.text %>% 
+  unnest_tokens(word, text)
+
+## remove stop words
+data(stop_words)
+tidy.reviews2.text <- tidy.reviews2.text %>% 
+  anti_join(stop_words)
+```
+
+Words with over 20,000 appearances in reviews as a whole.
+```{r, echo=FALSE}
+tidy.reviews2.text %>% count(word, sort=TRUE) %>%
+  filter(n > 20000) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n))+
+  geom_col()+
+  xlab(NULL)+
+  coord_flip()
+```
+
+
+# Sentiment Analysis with Three Lexicons
+## Sentiment Analysis with Afinn Lexicon
+### Calculate Afinn Sentiment Score and Index
+```{r}
+## inner join with afinn sentiments
+afinn.reviews2 <- tidy.reviews2.text %>%
+  inner_join(get_sentiments('afinn')) 
+
+## sum the sentiment of words by record
+afinn.reviews2 <- afinn.reviews2 %>%
+  group_by(recid) %>%
+  mutate(word.count=n()) %>%
+  mutate(afinn.sentiment=sum(value)) %>%
+  mutate(method='AFINN')
+```
+
+Get an index ranged from -1 to 1 using 
+
+1. word count per review
+
+2. rescale function from package scales
+```{r}
+## scale to -1 to 1 index, afinn sentiment is calculated on a -5 to 5 scale
+afinn.reviews2 <- afinn.reviews2 %>%
+  mutate(afinn.index=(afinn.sentiment/word.count)/5)
+
+## scale to -1 to 1 index with rescale function from package scales
+afinn.reviews2$afinn.sentiment.std <- rescale(afinn.reviews2$afinn.sentiment, to=c(-1,1))
+```
+
+
+Left join to selected columns of the original review2.csv file
+```{r}
+reviews2.sentiment <- merge(reviews2.csv[,c('recid', 'item_id', 'rating', 'incentivized', 'is_deleted', 'verified_purchaser', 'text', 'title')], 
+                            afinn.reviews2[,c('recid', 'afinn.sentiment', 'afinn.index', 'afinn.sentiment.std')], by='recid', all.x = T)
+```
+
+
+Observe missing values: ~86205 records don't have an afinn sentiment index
+```{r}
+summary(reviews2.sentiment$afinn.index)
+```
+
+
+```{r}
+reviews2.sentiment[, c('incentivized','afinn.index','afinn.sentiment')] %>%
+  group_by(incentivized) %>%
+  summarize_all(mean, na.rm = TRUE)
+```
+
+The summary statistics is quite surprising. I wonder if I made mistakes in any steps (e.g., there may be problems when I normalize the sentiment scores to an index)
+
+* There is a big difference in the Afinn sentiment score between non-incentivized vs. incentivized reviews
+
+* However, the difference is not as pronounced in the normalized index between the two groups
+
+
+### Plots
+Remove records with any na, so only ~60% of the data is available for ploting
+```{r}
+reviews2.sentiment.all <- na.omit(reviews2.sentiment)
+```
+
+Boxplot: afinn sentiment score vs. rating
+```{r, echo=FALSE}
+## less spread out than expected, but the trend is preserved
+# ggplot(reviews2.sentiment.all, aes(as.factor(rating), afinn.sentiment))+
+#   geom_boxplot()
+
+plot_ly(reviews2.sentiment.all, x = ~as.factor(rating), y = ~afinn.sentiment, type = 'box',
+        marker = list(color = 'rgb(8,81,156)',
+                      outliercolor = 'rgba(219, 64, 82, 0.6)',
+                      line = list(outliercolor = 'rgba(219, 64, 82, 1.0)',
+                                  outlierwidth = 2)),
+        line = list(color = 'rgb(8,81,156)')) %>%
+  layout(xaxis = list(title=""))
+```
+
+This record is the extreme outlier in the boxplot. The text review has 2476 words, which is the longest review in the dataset. It has a rating of 5 but receives a low sentiment index in all three lexicons. May need some additional investigation/processing.
+```{r}
+reviews2.csv[reviews2.csv$recid == 35676004, c('recid', 'item_id', 'rating', 'incentivized', 'is_deleted', 'verified_purchaser', 'title', 'word_count')]
+```
+
+
+Boxplot: afinn sentiment index vs. rating
+```{r, echo=FALSE}
+plot_ly(reviews2.sentiment.all, x = ~as.factor(rating), y = ~afinn.index, type = 'box',
+        marker = list(color = 'rgb(8,81,156)',
+                      outliercolor = 'rgba(219, 64, 82, 0.6)',
+                      line = list(outliercolor = 'rgba(219, 64, 82, 1.0)',
+                                  outlierwidth = 2)),
+        line = list(color = 'rgb(8,81,156)')) %>%
+  layout(xaxis = list(title=""))
+```
+
+
+
+### Linear Model
+Use Afinn sentiment score to replce rating
+```{r}
+# in model.fe, index = c('item_id') defines 'item_id' as the entity
+formula.fe <- afinn.sentiment ~ incentivized + is_deleted + verified_purchaser
+model.fe <- plm(data = reviews2.sentiment.all, formula = formula.fe, index = c('item_id'), model = 'within')
+# get the model summary
+summary(model.fe)
+```
+
+Use Afinn sentiment index to replce rating
+```{r}
+# in model.fe, index = c('item_id') defines 'item_id' as the entity
+formula.fe <- afinn.index ~ incentivized + is_deleted + verified_purchaser
+model.fe <- plm(data = reviews2.sentiment.all, formula = formula.fe, index = c('item_id'), model = 'within')
+# get the model summary
+summary(model.fe)
+```
+
+
+
+## Sentiment Analysis with Bing Lexicon
+### Calculate Bing Sentiment Score and Index
+```{r}
+## inner join with bing sentiments
+bing.reviews2 <- tidy.reviews2.text %>%
+  inner_join(get_sentiments('bing')) 
+
+## get sentiments of records by counting the number of positive vs. negative words per record
+bing.reviews2 <- bing.reviews2 %>%
+  group_by(recid) %>%
+  summarise(positive.count=sum(sentiment=='positive'),
+            negative.count=sum(sentiment=='negative'))
+
+bing.reviews2 <- bing.reviews2 %>%
+  mutate(bing.sentiment=positive.count-negative.count) %>%
+  mutate(word.count=positive.count+negative.count) %>%
+  mutate(method='BING')
+```
+
+Get an index ranged from -1 to 1 using 
+
+1. word count per review. Bing sentiment is calculated on a binary (positive/negative) scale
+
+2. rescale function from package scales
+```{r}
+## scale to -1 to 1 index based on word count per review
+bing.reviews2 <- bing.reviews2 %>%
+  mutate(bing.index=bing.sentiment/word.count)
+
+## scale to -1 to 1 index
+bing.reviews2$bing.sentiment.std <- rescale(bing.reviews2$bing.sentiment, to=c(-1,1))
+## observe outliers, which make the standardize tool not so helpful
+```
+
+
+Left join to selected columns of the original review2.csv file
+```{r}
+## left join
+reviews2.sentiment <- merge(reviews2.sentiment, bing.reviews2[,c('recid', 'bing.sentiment', 'bing.index', 'bing.sentiment.std')], by='recid', all.x = T)
+
+## deduplicate
+reviews2.sentiment <- reviews2.sentiment[!duplicated(reviews2.sentiment), ]
+```
+
+
+Observe missing values: ~72728 records don't have a bing sentiment index
+```{r}
+summary(reviews2.sentiment$bing.index)
+```
+
+
+```{r}
+reviews2.sentiment[, c('incentivized','bing.index','bing.sentiment')] %>%
+  group_by(incentivized) %>%
+  summarize_all(mean, na.rm = TRUE)
+```
+There is a big difference in both of the Bing sentiment score and the index between non-incentivized vs. incentivized reviews.
+
+
+### Plots
+Remove records with any na, so only ~60% of the data is available for ploting
+```{r}
+reviews2.sentiment.all <- na.omit(reviews2.sentiment)
+```
+
+Boxplot: bing sentiment score vs. rating
+```{r, echo=FALSE}
+## less spread out than expected, but the trend is preserved
+plot_ly(reviews2.sentiment.all, x = ~as.factor(rating), y = ~bing.sentiment, type = 'box',
+        marker = list(color = 'rgb(8,81,156)',
+                      outliercolor = 'rgba(219, 64, 82, 0.6)',
+                      line = list(outliercolor = 'rgba(219, 64, 82, 1.0)',
+                                  outlierwidth = 2)),
+        line = list(color = 'rgb(8,81,156)')) %>%
+  layout(xaxis = list(title=""))
+
+```
+
+Boxplot: bing sentiment index vs. rating
+```{r, echo=FALSE}
+plot_ly(reviews2.sentiment.all, x = ~as.factor(rating), y = ~bing.index, type = 'box',
+        marker = list(color = 'rgb(8,81,156)',
+                      outliercolor = 'rgba(219, 64, 82, 0.6)',
+                      line = list(outliercolor = 'rgba(219, 64, 82, 1.0)',
+                                  outlierwidth = 2)),
+        line = list(color = 'rgb(8,81,156)')) %>%
+  layout(xaxis = list(title=""))
+```
+
+
+### Linear Model
+Use Bing sentiment score to replce rating
+```{r}
+# in model.fe, index = c('item_id') defines 'item_id' as the entity
+formula.fe <- bing.sentiment ~ incentivized + is_deleted + verified_purchaser
+model.fe <- plm(data = reviews2.sentiment.all, formula = formula.fe, index = c('item_id'), model = 'within')
+# get the model summary
+summary(model.fe)
+```
+
+Use Bing sentiment index to replce rating
+```{r}
+# in model.fe, index = c('item_id') defines 'item_id' as the entity
+formula.fe <- bing.index ~ incentivized + is_deleted + verified_purchaser
+model.fe <- plm(data = reviews2.sentiment.all, formula = formula.fe, index = c('item_id'), model = 'within')
+# get the model summary
+summary(model.fe)
+```
+
+
+
+## Sentiment Analysis with Loughran Lexicon
+### Calculate Loughran Sentiment Score and Index
+```{r}
+loughran.pos.neg <- get_sentiments("loughran") %>% 
+  filter(sentiment %in% c("positive", "negative"))
+
+## inner join with loughrun sentiments
+loughran.reviews2 <- tidy.reviews2.text %>%
+  inner_join(loughran.pos.neg)
+
+## get sentiments of records by counting the number of positive vs. negative words per record
+loughran.reviews2 <- loughran.reviews2 %>%
+  group_by(recid) %>%
+  summarise(positive.count=sum(sentiment=='positive'),
+            negative.count=sum(sentiment=='negative'))
+
+loughran.reviews2 <- loughran.reviews2 %>%
+  mutate(loughran.sentiment=positive.count-negative.count) %>%
+  mutate(word.count=positive.count+negative.count) %>%
+  mutate(method='LOUGHRAN')
+```
+
+Get an index ranged from -1 to 1 using 
+
+1. word count per review. Loughran sentiment is calculated on a binary (positive/negative) scale
+
+2. rescale function from package scales
+```{r}
+## scale to -1 to 1 index based on word count per review
+loughran.reviews2 <- loughran.reviews2 %>%
+  mutate(loughran.index=loughran.sentiment/word.count)
+
+## scale to -1 to 1 index
+loughran.reviews2$loughran.sentiment.std <- rescale(loughran.reviews2$loughran.sentiment, to=c(-1,1))
+## observe outliers, which make the standardize tool not so helpful
+```
+
+
+Left join to selected columns of the original review2.csv file
+```{r}
+## left join
+reviews2.sentiment <- merge(reviews2.sentiment, loughran.reviews2[,c('recid', 'loughran.sentiment', 'loughran.index', 'loughran.sentiment.std')], by='recid', all.x = T)
+
+## deduplicate
+reviews2.sentiment <- reviews2.sentiment[!duplicated(reviews2.sentiment), ]
+```
+
+
+Observe missing values: ~149126 records don't have a bing sentiment index. Roughly twice as the na's in Bing and Afinn Lexicon
+```{r}
+summary(reviews2.sentiment$loughran.index)
+```
+
+
+```{r}
+reviews2.sentiment[, c('incentivized','loughran.index','loughran.sentiment')] %>%
+  group_by(incentivized) %>%
+  summarize_all(mean, na.rm = TRUE)
+```
+There is only a slight difference in both of the Bing sentiment score and the index between non-incentivized vs. incentivized reviews.
+
+
+### Plots
+Remove records with any na, so only ~45% of the data is available for ploting
+```{r}
+reviews2.sentiment.all <- na.omit(reviews2.sentiment)
+```
+
+Boxplot: Loughran sentiment score vs. rating
+```{r, echo=FALSE}
+## less spread out than expected, but the trend is preserved
+plot_ly(reviews2.sentiment.all, x = ~as.factor(rating), y = ~loughran.sentiment, type = 'box',
+        marker = list(color = 'rgb(8,81,156)',
+                      outliercolor = 'rgba(219, 64, 82, 0.6)',
+                      line = list(outliercolor = 'rgba(219, 64, 82, 1.0)',
+                                  outlierwidth = 2)),
+        line = list(color = 'rgb(8,81,156)')) %>%
+  layout(xaxis = list(title=""))
+```
+
+Boxplot: Loughran sentiment index vs. rating
+```{r, echo=FALSE}
+plot_ly(reviews2.sentiment.all, x = ~as.factor(rating), y = ~loughran.index, type = 'box',
+        marker = list(color = 'rgb(8,81,156)',
+                      outliercolor = 'rgba(219, 64, 82, 0.6)',
+                      line = list(outliercolor = 'rgba(219, 64, 82, 1.0)',
+                                  outlierwidth = 2)),
+        line = list(color = 'rgb(8,81,156)')) %>%
+  layout(xaxis = list(title=""))
+```
+
+
+### Linear Model
+Use Loughran sentiment score to replce rating
+```{r}
+# in model.fe, index = c('item_id') defines 'item_id' as the entity
+formula.fe <- loughran.sentiment ~ incentivized + is_deleted + verified_purchaser
+model.fe <- plm(data = reviews2.sentiment.all, formula = formula.fe, index = c('item_id'), model = 'within')
+# get the model summary
+summary(model.fe)
+```
+
+Use Loughran sentiment index to replce rating
+```{r}
+# in model.fe, index = c('item_id') defines 'item_id' as the entity
+formula.fe <- loughran.index ~ incentivized + is_deleted + verified_purchaser
+model.fe <- plm(data = reviews2.sentiment.all, formula = formula.fe, index = c('item_id'), model = 'within')
+# get the model summary
+summary(model.fe)
+```
+
+
+## Missing Sentiment Scores
+### Records with Missing Scores in All Three Lexicons
+Observe 22% of total records are missing all three lexicons sentiment scores
+```{r, echo=FALSE}
+## find number of rows with na in both indecies
+sentiment.na.summary <- data.frame(table(lapply(reviews2.sentiment[,c('afinn.sentiment','bing.sentiment', 'loughran.sentiment')], is.na)))
+sentiment.na.summary <- ddply(sentiment.na.summary, .(), mutate, Freq_pct = Freq/sum(Freq)*100)[-1]
+sentiment.na.summary
+```
+
+
+
+

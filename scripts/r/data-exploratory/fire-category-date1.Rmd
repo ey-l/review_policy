@@ -1,0 +1,503 @@
+---
+title: "Amazon Fire Product Categories & Review Date/Time Part 1"
+author: "Eugenie"
+date: "30/10/2019"
+output: 
+  html_document:
+    toc: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load Source File
+
+Data pre-processing is included, where special chars and minimal stop-words are removed.
+```{r echo=T, results='hide', message=F, warning=F}
+library(data.table)
+## load review data
+source("~/Dropbox/Eugenie/scripts/libs.R")
+```
+
+```{r, include=FALSE}
+# Load review data
+reviews3.csv <- read.csv("~/Dropbox/Eugenie/data/processed/merged-reviews.csv")
+reviews3.csv$date <- as.Date(reviews3.csv$date, "%Y-%m-%d")
+reviews3.csv$week <- as.Date(reviews3.csv$week, "%Y-%m-%d")
+# Load brand.bi data
+tablet_brands <- read_excel("~/Dropbox/Eugenie/data/raw/amazon-tablets.xlsx")
+```
+
+```{r, include=FALSE}
+# Data Processing
+# Drop records before 2013.
+reviews3.csv <- reviews3.csv[as.numeric(as.character(reviews3.csv$year))>2013,]
+# Drop records with no product category.
+reviews3.csv <- reviews3.csv[reviews3.csv$product_cat != 'none',]
+# Get selected columns for further analysis.
+reviews.product <- reviews3.csv[,c('recid','item_id','incentivized','product_cat','rating','word_count','helpful_yes','date','year','month','week')]
+```
+
+```{r, include=FALSE}
+# Add 'after_ban' label
+reviews.product['after_ban'] <- ifelse(reviews.product$date>'2016-10-02',1,0)
+reviews.product$after_ban <- as.factor(reviews.product$after_ban)
+levels(reviews.product$after_ban) <- c("before", "after")
+```
+
+```{r, include=FALSE}
+# Get tablets
+tablets <- reviews.product[reviews.product$product_cat == "tablets",]
+# Get brands
+tablets <- merge(tablets, tablet_brands)
+# Fire ids
+fire.id <- c("B010BWYDYA", "B01GEW27DA", "B01M3ULMWP", "B01MTF2Z37", "B073VVC94R", "B077H3HJJM", "B07F4P3JH7", "B0794Z55CH", "B07N8VFFNS", "B07N8XHDVX", "B0794PD8NR")
+# Get binary brands
+tablets["brand.bi"] <- ifelse(tablets$item_id %in% fire.id, "fire", "other")
+```
+
+```{r,include=FALSE}
+# Compute rating stats without splitting incentivized vs. non-incentivized reviews at all
+reviews.product <- tablets
+
+# Mean rating by day
+reviews.product <- reviews.product %>%
+  group_by(brand.bi, date) %>%
+  mutate(day_rating = mean(rating))
+
+# Mean rating by week
+reviews.product <- reviews.product %>%
+  group_by(brand.bi, year, week) %>%
+  mutate(week_rating = mean(rating))
+```
+
+# Time Data vs. Rating
+## Data processing
+Split data on date without splitting incentivized vs. non-incentivized reviews after 2016-10-03.
+```{r}
+## split on date
+reviews.product_non <- reviews.product[reviews.product$date<'2016-10-03'&reviews.product$incentivized=='non-incentivized',]
+reviews.product_incentivized <- reviews.product[reviews.product$date<'2016-10-03'&reviews.product$incentivized=='incentivized',]
+reviews.product_after <- reviews.product[reviews.product$date>'2016-10-03',]
+```
+
+Split data on date with split incentivized vs. non-incentivized reviews after 2016-10-03.
+```{r}
+## split on date
+reviews.product_non1 <- reviews.product[reviews.product$date<'2016-10-03'&reviews.product$incentivized=='non-incentivized',]
+reviews.product_incentivized1 <- reviews.product[reviews.product$date<'2016-10-03'&reviews.product$incentivized=='incentivized',]
+reviews.product_non2 <- reviews.product[reviews.product$date>'2016-10-03'&reviews.product$incentivized=='non-incentivized',]
+reviews.product_incentivized2 <- reviews.product[reviews.product$date>'2016-10-03'&reviews.product$incentivized=='incentivized',]
+```
+
+Compute rating stats without splitting incentivized vs. non-incentivized reviews after 2016-10-03.
+```{r}
+## mean rating by day
+reviews.product_non <- reviews.product_non %>%
+  group_by(brand.bi, date) %>%
+  mutate(day_rating = mean(rating))
+
+reviews.product_incentivized <- reviews.product_incentivized %>%
+  group_by(brand.bi, date) %>%
+  mutate(day_rating = mean(rating))
+
+reviews.product_after <- reviews.product_after %>%
+  group_by(brand.bi, date) %>%
+  mutate(day_rating = mean(rating))
+
+## mean rating by week
+reviews.product_non <- reviews.product_non %>%
+  group_by(brand.bi, year, week(date)) %>%
+  mutate(week_rating = mean(rating))
+
+reviews.product_incentivized <- reviews.product_incentivized %>%
+  group_by(brand.bi, year, week(date)) %>%
+  mutate(week_rating = mean(rating))
+
+reviews.product_after <- reviews.product_after %>%
+  group_by(brand.bi, year, week(date)) %>%
+  mutate(week_rating = mean(rating))
+
+## mean rating by month
+reviews.product_non <- reviews.product_non %>%
+  group_by(brand.bi, month) %>%
+  mutate(month_rating = mean(rating))
+
+reviews.product_incentivized <- reviews.product_incentivized %>%
+  group_by(brand.bi, month) %>%
+  mutate(month_rating = mean(rating))
+
+reviews.product_after <- reviews.product_after %>%
+  group_by(brand.bi, month) %>%
+  mutate(month_rating = mean(rating))
+```
+
+Compute rating stats with split incentivized vs. non-incentivized reviews after 2016-10-03, using the same procedure as above.
+```{r,include=FALSE}
+## mean rating by day
+reviews.product_non1 <- reviews.product_non1 %>%
+  group_by(brand.bi, date) %>%
+  mutate(day_rating = mean(rating))
+
+reviews.product_incentivized1 <- reviews.product_incentivized1 %>%
+  group_by(brand.bi, date) %>%
+  mutate(day_rating = mean(rating))
+
+reviews.product_non2 <- reviews.product_non2 %>%
+  group_by(brand.bi, date) %>%
+  mutate(day_rating = mean(rating))
+
+reviews.product_incentivized2 <- reviews.product_incentivized2 %>%
+  group_by(brand.bi, date) %>%
+  mutate(day_rating = mean(rating))
+
+## mean rating by week
+reviews.product_non1 <- reviews.product_non1 %>%
+  group_by(brand.bi, year, week(date)) %>%
+  mutate(week_rating = mean(rating))
+
+reviews.product_incentivized1 <- reviews.product_incentivized1 %>%
+  group_by(brand.bi, year, week(date)) %>%
+  mutate(week_rating = mean(rating))
+
+reviews.product_non2 <- reviews.product_non2 %>%
+  group_by(brand.bi, year, week(date)) %>%
+  mutate(week_rating = mean(rating))
+
+reviews.product_incentivized2 <- reviews.product_incentivized2 %>%
+  group_by(brand.bi, year, week(date)) %>%
+  mutate(week_rating = mean(rating))
+
+## mean rating by month
+reviews.product_non1 <- reviews.product_non1 %>%
+  group_by(brand.bi, month) %>%
+  mutate(month_rating = mean(rating))
+
+reviews.product_incentivized1 <- reviews.product_incentivized1 %>%
+  group_by(brand.bi, month) %>%
+  mutate(month_rating = mean(rating))
+
+reviews.product_non2 <- reviews.product_non2 %>%
+  group_by(brand.bi, month) %>%
+  mutate(month_rating = mean(rating))
+
+reviews.product_incentivized2 <- reviews.product_incentivized2 %>%
+  group_by(brand.bi, month) %>%
+  mutate(month_rating = mean(rating))
+```
+
+
+## Plot mean rating over time by brand.bi without splitting incentivized vs. non-incentivized reviews after 2016-10-03
+
+Although there're still reviews labelled as incentivized after 2016-10-03, since I'm not sure how that happened (e.g., prediction from ReviewMeta), I'm leaving it unsplit. The split version of the same analysis is in the next section.
+
+### Rating average by day
+```{r,echo=FALSE}
+## plot by day
+ggplot(NULL, aes(x = date, y = day_rating))+
+  geom_point(data=reviews.product_incentivized, aes(color = "incentivized"), alpha = 0.7,size=0.2)+
+  geom_point(data=reviews.product_non, aes(color = "non-incentivized"), alpha = 0.3,size=0.2)+
+  geom_point(data=reviews.product_after, aes(color = "unidentified"), alpha = 0.7,size=0.2)+
+  geom_smooth(data=reviews.product_incentivized,method = 'auto',aes(color='incentivized-line'),size=1,alpha = 0.6)+
+  geom_smooth(data=reviews.product_non,method = 'auto',aes(color='non-incentivized-line'),size=1,alpha = 0.6)+
+  geom_smooth(data=reviews.product_after,method = 'auto',aes(color='unidentified-line'),size=1,alpha = 0.6)+
+  theme_minimal()+
+  facet_grid(rows=vars(brand.bi))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  labs(x='day',y='mean rating',fill='category',title='Product Category Mean Rating by Day')
+```
+
+Observed that prior to 2016-10-03, the day average of incentivized reviews is generally higher and has a greater variation than non-incentivized reviews.
+
+### Rating averaged by week
+```{r,echo=FALSE}
+## by week
+ggplot(NULL, aes(x = week, y = week_rating))+ 
+  geom_point(data=reviews.product_incentivized, aes(color = "incentivized"), alpha = 0.7,size=0.2)+
+  geom_point(data=reviews.product_non, aes(color = "non-incentivized"), alpha = 0.7,size=0.2)+
+  geom_point(data=reviews.product_after, aes(color = "unidentified"), alpha = 0.7,size=0.2)+
+  geom_smooth(data=reviews.product_incentivized,method = 'auto',aes(color='incentivized-line'),size=1,alpha = 0.6)+
+  geom_smooth(data=reviews.product_non,method = 'auto',aes(color='non-incentivized-line'),size=1,alpha = 0.6)+
+  geom_smooth(data=reviews.product_after,method = 'auto',aes(color='unidentified-line'),size=1,alpha = 0.6)+
+  theme_minimal()+
+  facet_grid(rows=vars(brand.bi))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  labs(x='week',y='mean rating',fill='category',title='Product Category Mean Rating by Week')
+```
+
+### Rating averaged by month
+```{r,echo=FALSE}
+## by month
+ggplot(NULL, aes(x = month, y = month_rating, color = brand.bi))+
+  geom_point(data=reviews.product_incentivized, aes(color = "incentivized"), alpha = 1,size=0.2)+
+  geom_point(data=reviews.product_non, aes(color = "non-incentivized"), alpha = 0.5,size=0.2)+
+  geom_point(data=reviews.product_after, aes(color = "unidentified"), alpha = 0.5,size=0.2)+
+  geom_smooth(data=reviews.product_incentivized,method = 'auto',aes(color='incentivized-line'),size=1,alpha = 0.6)+
+  geom_smooth(data=reviews.product_non,method = 'auto',aes(color='non-incentivized-line'),size=1,alpha = 0.6)+
+  geom_smooth(data=reviews.product_after,method = 'auto',aes(color='unidentified-line'),size=1,alpha = 0.6)+
+  theme_minimal()+
+  facet_grid(rows=vars(brand.bi))+
+  geom_vline(xintercept = as.Date('2016-10-02'), color = "black", size=0.3)+
+  labs(x='month',y='mean rating',fill='category',title='Product Category Mean Rating by Month')
+
+```
+
+## Plot mean rating over time by brand.bi with split incentivized vs. non-incentivized reviews after 2016-10-03
+
+### Rating average by day
+```{r,echo=FALSE}
+## plot by day
+ggplot(NULL, aes(x = date, y = day_rating))+
+  geom_point(data=reviews.product_incentivized1, aes(color = "incentivized-before"), alpha = 1,size=0.2)+
+  geom_point(data=reviews.product_non1, aes(color = "non-incentivized-before"), alpha = 0.3,size=0.2)+
+  geom_point(data=reviews.product_incentivized2, aes(color = "incentivized-after"), alpha = 1,size=0.2)+
+  geom_point(data=reviews.product_non2, aes(color = "non-incentivized-after"), alpha = 0.3,size=0.2)+
+  geom_smooth(data=reviews.product_incentivized1,method = 'auto',aes(color='incentivized-before-line'),size=1,alpha = 0.6)+
+  geom_smooth(data=reviews.product_non1,method = 'auto',aes(color='non-incentivized-before-line'),size=1,alpha = 0.6)+
+  geom_smooth(data=reviews.product_incentivized2,method = 'auto',aes(color='incentivized-after-line'),size=1,alpha = 0.6)+
+  geom_smooth(data=reviews.product_non2,method = 'auto',aes(color='non-incentivized-after-line'),size=1,alpha = 0.6)+
+  theme_minimal()+
+  facet_grid(rows=vars(brand.bi))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  labs(x='day',y='mean rating',fill='category',title='Product Category Mean Rating by Day')
+
+```
+
+Noticed that due to the lack of data points (i.e., labelled incentivized reviews) after 2016-10-03, the lines are looking weird. I'm not sure if the result is meanful or not, so I'm dropping these for the analysis of word_count and helpful_yes.
+
+Also, the distribution of the labelled incentivized reviews after 2016-10-03 is drastically different than the distribution of the incentivized review before 2016-10-03 for all three known product categories. How the 'incentivized' reviews got labelled is questionable.
+
+### Rating averaged by week
+```{r,echo=FALSE}
+## by week
+ggplot(NULL, aes(x = week, y = week_rating))+ 
+  geom_point(data=reviews.product_incentivized1, aes(color = "incentivized-before"), alpha = 1,size=0.2)+
+  geom_point(data=reviews.product_non1, aes(color = "non-incentivized-before"), alpha = 0.5,size=0.2)+
+  geom_point(data=reviews.product_incentivized2, aes(color = "incentivized-after"), alpha = 1,size=0.2)+
+  geom_point(data=reviews.product_non2, aes(color = "non-incentivized-after"), alpha = 0.5,size=0.2)+
+  geom_smooth(data=reviews.product_incentivized1,method = 'auto',aes(color='incentivized-before-line'),size=1,alpha = 0.6)+
+  geom_smooth(data=reviews.product_non1,method = 'auto',aes(color='non-incentivized-before-line'),size=1,alpha = 0.6)+
+  geom_smooth(data=reviews.product_incentivized2,method = 'auto',aes(color='incentivized-after-line'),size=1,alpha = 0.6)+
+  geom_smooth(data=reviews.product_non2,method = 'auto',aes(color='non-incentivized-after-line'),size=1,alpha = 0.6)+
+  theme_minimal()+
+  facet_grid(rows=vars(brand.bi))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  labs(x='week',y='mean rating',fill='category',title='Product Category Mean Rating by Week')
+```
+
+### Rating averaged by month
+Basically the same graph as the 'rating average by week'.
+
+
+# Word Count
+## Data Processing
+Compute word count stats with the same precudure as above.
+```{r,include=FALSE}
+## mean word_count by day
+reviews.product_non <- reviews.product_non %>%
+  group_by(brand.bi, date) %>%
+  mutate(day_word.count = mean(word_count))
+
+reviews.product_incentivized <- reviews.product_incentivized %>%
+  group_by(brand.bi, date) %>%
+  mutate(day_word.count = mean(word_count))
+
+reviews.product_after <- reviews.product_after %>%
+  group_by(brand.bi, date) %>%
+  mutate(day_word.count = mean(word_count))
+
+## mean word_count by week
+reviews.product_non <- reviews.product_non %>%
+  group_by(brand.bi, year, week(date)) %>%
+  mutate(week_word.count = mean(word_count))
+
+reviews.product_incentivized <- reviews.product_incentivized %>%
+  group_by(brand.bi, year, week(date)) %>%
+  mutate(week_word.count = mean(word_count))
+
+reviews.product_after <- reviews.product_after %>%
+  group_by(brand.bi, date) %>%
+  mutate(week_word.count = mean(word_count))
+
+## mean word_count by month
+reviews.product_non <- reviews.product_non %>%
+  group_by(brand.bi, month) %>%
+  mutate(month_word.count = mean(word_count))
+
+reviews.product_incentivized <- reviews.product_incentivized %>%
+  group_by(brand.bi, month) %>%
+  mutate(month_word.count = mean(word_count))
+
+reviews.product_after <- reviews.product_after %>%
+  group_by(brand.bi, date) %>%
+  mutate(month_word.count = mean(word_count))
+```
+
+
+## Plot mean word_count over time by brand.bi
+### word_count average by day
+```{r,echo=FALSE}
+## plot by date
+## geom_smooth() using method = 'gam' and formula y ~ s(x, bs = "cs")
+ggplot(NULL, aes(x = date, y = day_word.count))+
+  geom_point(data=reviews.product_incentivized, aes(color = "incentivized"), alpha = 1,size=0.2)+
+  geom_point(data=reviews.product_non, aes(color = "non-incentivized"), alpha = 0.5,size=0.2)+
+  geom_point(data=reviews.product_after, aes(color = "unidentified"), alpha = 1,size=0.2)+
+  geom_smooth(data=reviews.product_incentivized,method = 'auto',aes(color='incentivized-line'),size=1,alpha = 0.6)+
+  geom_smooth(data=reviews.product_non,method = 'auto',aes(color='non-incentivized-line'),size=1,alpha = 0.6)+
+  geom_smooth(data=reviews.product_after,method = 'auto',aes(color='unidentified-line'),size=1,alpha = 0.6)+
+  theme_minimal()+
+  facet_grid(rows=vars(brand.bi))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  labs(x='day',y='mean word_count',fill='category',title='Product Category Mean word_count by Day')
+```
+
+Same as the rating analysis, observed that prior to 2016-10-03, the daily word count average of incentivized reviews is higher and has a greater variation than non-incentivized reviews.
+
+### word_count averaged by week
+```{r,echo=FALSE}
+## geom_smooth() using method = 'gam' and formula y ~ s(x, bs = "cs")
+ggplot(NULL, aes(x = week, y = week_word.count))+ 
+  geom_point(data=reviews.product_incentivized, aes(color = "incentivized"), alpha = 1,size=0.2)+
+  geom_point(data=reviews.product_non, aes(color = "non-incentivized"), alpha = 0.5,size=0.2)+
+  geom_point(data=reviews.product_after, aes(color = "unidentified"), alpha = 1,size=0.2)+
+  geom_smooth(data=reviews.product_incentivized,method = 'auto',aes(color='incentivized-line'),size=1,alpha = 0.6)+
+  geom_smooth(data=reviews.product_non,method = 'auto',aes(color='non-incentivized-line'),size=1,alpha = 0.6)+
+  geom_smooth(data=reviews.product_after,method = 'auto',aes(color='unidentified-line'),size=1,alpha = 0.6)+
+  theme_minimal()+
+  facet_grid(rows=vars(brand.bi))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  labs(x='week',y='mean word_count',fill='category',title='Product Category Mean word_count by Week')
+```
+
+On a weekly scale, the average and variation of the word count of the incentivized reviews prior to 2016-10-03 is still high, but the range of the outliers got tuned down a bit.
+
+### word_count averaged by month
+```{r,echo=FALSE}
+## by month
+## geom_smooth() using method = 'gam' and formula y ~ s(x, bs = "cs")
+ggplot(NULL, aes(x = month, y = month_word.count, color = brand.bi))+
+  geom_point(data=reviews.product_incentivized, aes(color = "incentivized"), alpha = 1,size=0.2)+
+  geom_point(data=reviews.product_non, aes(color = "non-incentivized"), alpha = 0.5,size=0.2)+
+  geom_point(data=reviews.product_after, aes(color = "unidentified"), alpha = 1,size=0.2)+
+  geom_smooth(data=reviews.product_incentivized,method = 'auto',aes(color='incentivized-line'),size=1,alpha = 0.6)+
+  geom_smooth(data=reviews.product_non,method = 'auto',aes(color='non-incentivized-line'),size=1,alpha = 0.6)+
+  geom_smooth(data=reviews.product_after,method = 'auto',aes(color='unidentified-line'),size=1,alpha = 0.6)+
+  theme_minimal()+
+  facet_grid(rows=vars(brand.bi))+
+  geom_vline(xintercept = as.Date('2016-10-02'), color = "black", size=0.3)+
+  labs(x='month',y='mean word_count',fill='category',title='Product Category Mean word_count by Month')
+```
+
+
+
+# Helpful_yes
+## Data Processing
+Compute helpful_yes stats with the same precudure as above.
+```{r,include=FALSE}
+## mean helpful_yes by day
+reviews.product_non <- reviews.product_non %>%
+  group_by(brand.bi, date) %>%
+  mutate(day_helpful.yes = mean(helpful_yes))
+
+reviews.product_incentivized <- reviews.product_incentivized %>%
+  group_by(brand.bi, date) %>%
+  mutate(day_helpful.yes = mean(helpful_yes))
+
+reviews.product_after <- reviews.product_after %>%
+  group_by(brand.bi, date) %>%
+  mutate(day_helpful.yes = mean(helpful_yes))
+
+## mean helpful_yes by week
+reviews.product_non <- reviews.product_non %>%
+  group_by(brand.bi, year, week(date)) %>%
+  mutate(week_helpful.yes = mean(helpful_yes))
+
+reviews.product_incentivized <- reviews.product_incentivized %>%
+  group_by(brand.bi, year, week(date)) %>%
+  mutate(week_helpful.yes = mean(helpful_yes))
+
+reviews.product_after <- reviews.product_after %>%
+  group_by(brand.bi, date) %>%
+  mutate(week_helpful.yes = mean(helpful_yes))
+
+## mean helpful_yes by month
+reviews.product_non <- reviews.product_non %>%
+  group_by(brand.bi, month) %>%
+  mutate(month_helpful.yes = mean(helpful_yes))
+
+reviews.product_incentivized <- reviews.product_incentivized %>%
+  group_by(brand.bi, month) %>%
+  mutate(month_helpful.yes = mean(helpful_yes))
+
+reviews.product_after <- reviews.product_after %>%
+  group_by(brand.bi, date) %>%
+  mutate(month_helpful.yes = mean(helpful_yes))
+```
+
+## General stats
+As we discovered in previous analysis, the helpful_yes factor is very sparse. Also, it's a bit suspicious that we only have 3 reviews with the count of helpful_yes greater than 0 since 2016-10-03. 
+```{r}
+cat_sum <- reviews.product %>%
+  mutate(is_after = ifelse(date > '2016-10-03','after 2016-10-03','before 2016-10-03')) %>%
+  mutate(is_zero = ifelse(helpful_yes > 0,'greater than 0','0')) %>%
+  group_by(is_after,is_zero) %>%
+  summarise(review.count = n()) %>%
+  mutate(review.pct = review.count/sum(review.count)*100)
+cat_sum
+```
+
+
+## Plot mean helpful_yes over time by brand.bi
+### helpful_yes average by day
+```{r,echo=FALSE}
+## plot by date
+## geom_smooth() using method = 'gam' and formula y ~ s(x, bs = "cs")
+ggplot(NULL, aes(x = date, y = day_helpful.yes))+
+  geom_point(data=reviews.product_incentivized, aes(color = "incentivized"), alpha = 1,size=0.2)+
+  geom_point(data=reviews.product_non, aes(color = "non-incentivized"), alpha = 0.5,size=0.2)+
+  geom_point(data=reviews.product_after, aes(color = "unidentified"), alpha = 1,size=0.2)+
+  geom_smooth(data=reviews.product_incentivized,method = 'auto',aes(color='incentivized-line'),size=1,alpha = 0.6)+
+  geom_smooth(data=reviews.product_non,method = 'auto',aes(color='non-incentivized-line'),size=1,alpha = 0.6)+
+  geom_smooth(data=reviews.product_after,method = 'auto',aes(color='unidentified-line'),size=1,alpha = 0.6)+
+  theme_minimal()+
+  facet_grid(rows=vars(brand.bi))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  labs(x='day',y='mean helpful_yes',fill='category',title='Product Category Mean helpful_yes by Day')
+```
+
+### helpful_yes averaged by week
+```{r,echo=FALSE}
+## geom_smooth() using method = 'gam' and formula y ~ s(x, bs = "cs")
+ggplot(NULL, aes(x = week, y = week_helpful.yes))+ 
+  geom_point(data=reviews.product_incentivized, aes(color = "incentivized"), alpha = 1,size=0.2)+
+  geom_point(data=reviews.product_non, aes(color = "non-incentivized"), alpha = 0.5,size=0.2)+
+  geom_point(data=reviews.product_after, aes(color = "unidentified"), alpha = 1,size=0.2)+
+  geom_smooth(data=reviews.product_incentivized,method = 'auto',aes(color='incentivized-line'),size=1,alpha = 0.6)+
+  geom_smooth(data=reviews.product_non,method = 'auto',aes(color='non-incentivized-line'),size=1,alpha = 0.6)+
+  geom_smooth(data=reviews.product_after,method = 'auto',aes(color='unidentified-line'),size=1,alpha = 0.6)+
+  theme_minimal()+
+  facet_grid(rows=vars(brand.bi))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  labs(x='week',y='mean helpful_yes',fill='category',title='Product Category Mean helpful_yes by Week')
+```
+
+### helpful_yes averaged by month
+```{r,echo=FALSE}
+## by month
+## geom_smooth() using method = 'gam' and formula y ~ s(x, bs = "cs")
+ggplot(NULL, aes(x = month, y = month_helpful.yes, color = brand.bi))+
+  geom_point(data=reviews.product_incentivized, aes(color = "incentivized"), alpha = 1,size=0.2)+
+  geom_point(data=reviews.product_non, aes(color = "non-incentivized"), alpha = 0.5,size=0.2)+
+  geom_point(data=reviews.product_after, aes(color = "unidentified"), alpha = 1,size=0.2)+
+  geom_smooth(data=reviews.product_incentivized,method = 'auto',aes(color='incentivized-line'),size=1,alpha = 0.6)+
+  geom_smooth(data=reviews.product_non,method = 'auto',aes(color='non-incentivized-line'),size=1,alpha = 0.6)+
+  geom_smooth(data=reviews.product_after,method = 'auto',aes(color='unidentified-line'),size=1,alpha = 0.6)+
+  theme_minimal()+
+  facet_grid(rows=vars(brand.bi))+
+  geom_vline(xintercept = as.Date('2016-10-02'), color = "black", size=0.3)+
+  labs(x='month',y='mean helpful_yes',fill='category',title='Product Category Mean helpful_yes by Month')
+```
+

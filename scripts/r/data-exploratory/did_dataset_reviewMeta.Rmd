@@ -1,0 +1,349 @@
+---
+title: "Create the diff-in-diff dataset from ReviewMeta dataset"
+author: "Eugenie Lai"
+date: "25/03/2020"
+output: 
+  html_document:
+    toc: true
+    number_sections: true
+---
+
+<style>
+
+table, td, th {
+  border: none;
+  padding-left: 1em;
+  padding-right: 1em;
+  margin-left: auto;
+  margin-right: auto;
+  margin-top: 1em;
+  margin-bottom: 1em;
+}
+
+</style>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load Source File
+
+Data pre-processing is included, where special chars and minimal stop-words are removed.
+```{r echo=T, results='hide', message=F, warning=F}
+library(data.table)
+library(coefplot)
+library("arm")
+## load review data
+source("~/Dropbox/Eugenie/scripts/libs.R")
+```
+
+- Load review data and brand data
+```{r, include=FALSE}
+# Load review data
+reviews.csv <- read.csv("~/Dropbox/Eugenie/data/processed_reviewMeta/merged-reviews.csv")
+reviews.csv$date <- as.Date(reviews.csv$date, "%Y-%m-%d")
+reviews.csv$week <- as.Date(reviews.csv$week, "%Y-%m-%d")
+```
+
+- Get reviews 6 months before and after the ban
+```{r, include=FALSE}
+# Get reviews 6 months before and after the ban
+reviews.csv <- reviews.csv[reviews.csv$date>'2016-04-02',]
+reviews.csv <- reviews.csv[reviews.csv$date<'2017-04-02',]
+```
+
+
+```{r, include=FALSE}
+# Load brand data
+cable_brands <- read_excel("~/Dropbox/Eugenie/data/ReviewMeta_Amazon_Data/amazon-cables.xlsx")
+tablet_brands <- read_excel("~/Dropbox/Eugenie/data/ReviewMeta_Amazon_Data/amazon-tablets.xlsx")
+```
+
+
+# Data Processing
+
+- Drop records with no product category
+```{r, include=FALSE}
+# Drop records with no product category.
+reviews.csv <- reviews.csv[reviews.csv$product_cat != 'none',]
+# Get selected columns for further analysis.
+reviews.product <- reviews.csv[,c('recid','item_id','child_id','product_cat', 'incentivized','verified_purchaser','positive','rating','word_count','helpful_yes','image_count','date','year','month','week')]
+```
+
+- Add 'after_ban' label
+```{r, include=FALSE}
+# Add 'after_ban' label
+reviews.product['after_ban'] <- ifelse(reviews.product$date>'2016-10-02',1,0)
+#reviews.product$after_ban <- as.factor(reviews.product$after_ban)
+#levels(reviews.product$after_ban) <- c("before", "after")
+```
+
+# Get Amazon and non-Non-Amazon products from cable and tablet category
+```{r, include=FALSE}
+# Get cables
+cables <- reviews.product[reviews.product$product_cat == "phone_cables",]
+# Get brands
+cables <- merge(cables, cable_brands, by='item_id', all.x=T)
+cables2 <- cables[is.na(cables$brand),]
+# Get brands for child_id
+cables2 <- merge(cables2, cable_brands, by.x = 'child_id', by.y = 'item_id')
+cables <- na.omit(cables)
+# Merge
+cables2 <- cables2[,c('recid','item_id','child_id','product_cat', 'incentivized','verified_purchaser','positive','rating','word_count','helpful_yes','image_count','date','year','month','week','after_ban','brand.y')]
+names(cables2) <- c('recid','item_id','child_id','product_cat', 'incentivized','verified_purchaser','positive','rating','word_count','helpful_yes','image_count','date','year','month','week','after_ban','brand')
+cables <- rbind(cables, cables2)
+```
+
+```{r, include=FALSE}
+# Get tablets
+tablets <- reviews.product[reviews.product$product_cat == "tablets",]
+# Get brands
+tablets <- merge(tablets, tablet_brands, by='item_id', all.x=T)
+tablets2 <- tablets[is.na(tablets$brand),]
+# Get brands for child_id
+tablets2 <- merge(tablets2, cable_brands, by.x = 'child_id', by.y = 'item_id')
+tablets <- na.omit(tablets)
+# Merge
+tablets2 <- tablets2[,c('recid','item_id','child_id','product_cat', 'incentivized','verified_purchaser','positive','rating','word_count','helpful_yes','image_count','date','year','month','week','after_ban','brand.y')]
+names(tablets2) <- c('recid','item_id','child_id','product_cat', 'incentivized','verified_purchaser','positive','rating','word_count','helpful_yes','image_count','date','year','month','week','after_ban','brand')
+tablets <- rbind(tablets, tablets2)
+```
+
+```{r, include=FALSE}
+# Merge cables and tablets
+did.reviews <- rbind(cables, tablets)
+```
+
+
+# Get weekly measurements
+```{r, include=FALSE}
+# Convert labels from factor to numeric
+levels(did.reviews$incentivized) <- c(1, 0)
+levels(did.reviews$verified_purchaser) <- c(0, 1)
+did.reviews$incentivized <- as.numeric(as.character(did.reviews$incentivized))
+did.reviews$verified_purchaser <- as.numeric(as.character(did.reviews$verified_purchaser))
+```
+
+```{r, include=FALSE}
+# List of dependent variables
+# Compute weekly stats for each product
+# Mean measurement by week
+did.reviews <- did.reviews %>%
+  group_by(item_id, week) %>%
+  mutate(week_n = n()) %>%
+  mutate(week_rating = mean(rating)) %>%
+  mutate(week_positive = mean(positive)) %>%
+  mutate(week_word_count = mean(word_count)) %>%
+  mutate(week_helpful_yes = mean(helpful_yes)) %>%
+  mutate(week_image_count = mean(image_count))
+```
+
+```{r, include=FALSE}
+did.reviews <- did.reviews %>%
+  group_by(item_id, week) %>%
+  mutate(week_n_incentivized = sum(incentivized)) %>%
+  mutate(week_n_verified = sum(verified_purchaser)) %>%
+  mutate(week_incentivized = week_n_incentivized / week_n) %>%
+  mutate(week_verified = week_n_verified / week_n)
+```
+
+```{r, results='asis', echo=FALSE}
+fe.helpful_yes <- plm(data = did.reviews, formula = helpful_yes ~ word_count + image_count, index = c('product_cat'), model = 'within')
+
+stargazer(fe.helpful_yes, title="Linear Regression FE on Product Category Results", align=TRUE, type='html', dep.var.labels=c("Helpfulness"), covariate.labels=c("Length","Image count"))
+```
+
+```{r, results='asis', echo=FALSE}
+fe.rating <- plm(data = did.reviews, formula = rating ~ incentivized, index = c('product_cat'), model = 'within')
+fe.positive <- plm(data = did.reviews, formula = positive ~ incentivized, index = c('product_cat'), model = 'within')
+fe.word_count <- plm(data = did.reviews, formula = word_count ~ incentivized, index = c('product_cat'), model = 'within')
+fe.image <- plm(data = did.reviews, formula = image_count ~ incentivized, index = c('product_cat'), model = 'within')
+fe.helpful_yes <- plm(data = did.reviews, formula = helpful_yes ~ incentivized, index = c('product_cat'), model = 'within')
+
+stargazer(fe.rating, fe.positive, fe.word_count, fe.helpful_yes, fe.image, title="Linear Regression FE on Product Category Results", align=TRUE, type='html', dep.var.labels=c("Rating","Sentiment","Length","Helpfulness","Image count"), covariate.labels=c("Incentivized"))
+```
+
+```{r, results='asis', echo=FALSE}
+fe.rating <- plm(data = did.reviews, formula = rating ~ incentivized, index = c('brand'), model = 'within')
+fe.positive <- plm(data = did.reviews, formula = positive ~ incentivized, index = c('brand'), model = 'within')
+fe.word_count <- plm(data = did.reviews, formula = word_count ~ incentivized, index = c('brand'), model = 'within')
+fe.image <- plm(data = did.reviews, formula = image_count ~ incentivized, index = c('brand'), model = 'within')
+fe.helpful_yes <- plm(data = did.reviews, formula = helpful_yes ~ incentivized, index = c('brand'), model = 'within')
+
+stargazer(fe.rating, fe.positive, fe.word_count, fe.helpful_yes, fe.image, title="Linear Regression FE on Brand Results", align=TRUE, type='html', dep.var.labels=c("Rating","Sentiment","Length","Helpfulness","Image count"), covariate.labels=c("Incentivized"))
+```
+
+```{r, results='asis', echo=FALSE}
+fe.rating <- plm(data = did.reviews, formula = rating ~ incentivized, index = c('item_id'), model = 'within')
+fe.positive <- plm(data = did.reviews, formula = positive ~ incentivized, index = c('item_id'), model = 'within')
+fe.word_count <- plm(data = did.reviews, formula = word_count ~ incentivized, index = c('item_id'), model = 'within')
+fe.image <- plm(data = did.reviews, formula = image_count ~ incentivized, index = c('item_id'), model = 'within')
+fe.helpful_yes <- plm(data = did.reviews, formula = helpful_yes ~ incentivized, index = c('item_id'), model = 'within')
+
+stargazer(fe.rating, fe.positive, fe.word_count, fe.helpful_yes, fe.image, title="Linear Regression FE on Product Results", align=TRUE, type='html', dep.var.labels=c("Rating","Sentiment","Length","Helpfulness","Image count"), covariate.labels=c("Incentivized"))
+```
+
+
+# Get products
+```{r, include=FALSE}
+did.products <- did.reviews[,c('item_id','child_id','product_cat','week_n','week_positive','week_rating','week_word_count','week_helpful_yes','week_image_count','week_incentivized','week_verified','year','month','week','after_ban','brand')]
+did.products <- did.products %>% distinct()
+```
+
+```{r, include=FALSE}
+# Add amazon attribute
+did.products['non_amazon_product'] <- ifelse(did.products$brand %in% c('AmazonBasics','fire'), 0, 1)
+```
+
+```{r, include=FALSE}
+# Write to save
+#write.csv(did.reviews, file="did_reviews_reviewMeta.csv", row.names=FALSE)
+```
+
+```{r, include=FALSE}
+# Split to Amazon and non-Non-Amazon products
+did.amazon <- did.products[did.products$non_amazon_product == 0,]
+did.nonamazon <- did.products[did.products$non_amazon_product == 1,]
+```
+
+```{r}
+library(knitr)
+library(kableExtra)
+table <- did.products %>% 
+  group_by(product_cat) %>% 
+  summarize(brand_count = n_distinct(brand),
+            product_count = n_distinct(item_id))
+names(table) <- c('Product Category','Brand Count','Product Count')
+table %>%
+  kable() %>%
+  kable_styling()
+```
+
+# Diff-in-diff Estimator
+
+```{r, results='asis', echo=FALSE}
+# Estimating the DID estimator
+didreg.rating = lm(week_rating ~ non_amazon_product * after_ban, data = did.products)
+didreg.sentiment = lm(week_positive ~ non_amazon_product * after_ban, data = did.products)
+didreg.length = lm(week_word_count ~ non_amazon_product * after_ban, data = did.products)
+didreg.helpfulness = lm(week_helpful_yes ~ non_amazon_product * after_ban, data = did.products)
+didreg.image = lm(week_image_count ~ non_amazon_product * after_ban, data = did.products)
+
+stargazer(didreg.rating, didreg.sentiment, didreg.length, didreg.helpfulness, didreg.image, title="Difference-in-Difference Results", align=TRUE, type='html', dep.var.labels=c("Rating","Sentiment","Length","Helpfulness", "Image count"),covariate.labels=c("Non-Amazon product","After ban","Non-Amazon product x After ban","Constant"), add.lines=list(c("Product Category Fixed Effects",rep("No", 5)),c("Brand Fixed Effects",rep("No", 5))))
+```
+
+```{r, results='asis', echo=FALSE}
+# Estimating the DID estimator
+pdf <- pdata.frame(did.products, index = c("product_cat"))
+didreg.rating = plm(week_rating ~ non_amazon_product * after_ban, data = pdf, model = "within", effect = "twoways")
+didreg.sentiment = plm(week_positive ~ non_amazon_product * after_ban, data = pdf, model = "within", effect = "twoways")
+didreg.length = plm(week_word_count ~ non_amazon_product * after_ban, data = pdf, model = "within", effect = "twoways")
+didreg.helpfulness = plm(week_helpful_yes ~ non_amazon_product * after_ban, data = pdf, model = "within", effect = "twoways")
+didreg.image = plm(week_image_count ~ non_amazon_product * after_ban, data = pdf, model = "within", effect = "twoways")
+
+stargazer(didreg.rating, didreg.sentiment, didreg.length, didreg.helpfulness, didreg.image, title="Difference-in-Difference with FE on Product Category Results", align=TRUE, type='html', dep.var.labels=c("Rating","Sentiment","Length","Helpfulness", "Image count"),covariate.labels=c("Non-Amazon product","After ban","Non-Amazon product x After ban","Constant"),
+add.lines=list(c("Product Category Fixed Effects",rep("Yes", 5)),c("Brand Fixed Effects",rep("No", 5))))
+```
+
+```{r results='asis', echo=FALSE}
+# {r eval = FALSE, results='asis', echo=FALSE}
+# Estimating the DID estimator
+pdf <- pdata.frame(did.products, index = c("brand"))
+didreg.rating = plm(week_rating ~ non_amazon_product * after_ban, data = pdf, model = "within", effect = "twoways")
+didreg.sentiment = plm(week_positive ~ non_amazon_product * after_ban, data = pdf, model = "within", effect = "twoways")
+didreg.length = plm(week_word_count ~ non_amazon_product * after_ban, data = pdf, model = "within", effect = "twoways")
+didreg.helpfulness = plm(week_helpful_yes ~ non_amazon_product * after_ban, data = pdf, model = "within", effect = "twoways")
+didreg.image = plm(week_image_count ~ non_amazon_product * after_ban, data = pdf, model = "within", effect = "twoways")
+
+stargazer(didreg.rating, didreg.sentiment, didreg.length, didreg.helpfulness, didreg.image, title="Difference-in-Difference with FE on Brand Results", align=TRUE, type='html', dep.var.labels=c("Rating","Sentiment","Length","Helpfulness", "Image count"),covariate.labels=c("After ban","Non-Amazon product x After ban"), add.lines=list(c("Product Category Fixed Effects",rep("No", 5)),c("Brand Fixed Effects",rep("Yes", 5))))
+```
+
+
+```{r eval = FALSE, results='asis', echo=FALSE}
+# {r eval = FALSE, results='asis', echo=FALSE}
+# Estimating the DID estimator
+pdf <- pdata.frame(did.products, index = c("item_id"))
+didreg.rating = plm(week_rating ~ non_amazon_product * after_ban, data = pdf, model = "within", effect = "twoways")
+didreg.sentiment = plm(week_positive ~ non_amazon_product * after_ban, data = pdf, model = "within", effect = "twoways")
+didreg.length = plm(week_word_count ~ non_amazon_product * after_ban, data = pdf, model = "within", effect = "twoways")
+didreg.helpfulness = plm(week_helpful_yes ~ non_amazon_product * after_ban, data = pdf, model = "within", effect = "twoways")
+didreg.image = plm(week_image_count ~ non_amazon_product * after_ban, data = pdf, model = "within", effect = "twoways")
+
+stargazer(didreg.rating, didreg.sentiment, didreg.length, didreg.helpfulness, didreg.image, title="Difference-in-Difference with FE on Product Results", align=TRUE, type='html', dep.var.labels=c("Rating","Sentiment","Length","Helpfulness", "Image count"),covariate.labels=c("After ban","Non-Amazon product x After ban"))
+```
+
+# Testing the Assumptions
+
+```{r, results='asis', echo=FALSE}
+did.before <- did.products[did.products$after_ban == 0,]
+did.before$month <- as.factor(did.before$month)
+didreg.rating.before <- lm(week_rating ~ non_amazon_product * month, data = did.before)
+didreg.sentiment.before <- lm(week_positive ~ non_amazon_product * month, data = did.before)
+didreg.length.before <- lm(week_word_count ~ non_amazon_product * month, data = did.before)
+didreg.helpfulness.before <- lm(week_helpful_yes ~ non_amazon_product * month, data = did.before)
+didreg.image.before <- lm(week_image_count ~ non_amazon_product * month, data = did.before)
+
+#stargazer(didreg.rating.before, didreg.sentiment.before, didreg.length.before, didreg.helpfulness.before, didreg.image.before, title="Difference-in-Difference Pre-Treatment Parallel Assumption Check", align=TRUE, type='html', dep.var.labels=c("Rating","Sentiment","Length","Helpfulness", "Image count"))
+```
+
+```{r}
+new_names = c('Intercept', 'NA','2016 May','2016 June','2016 July','2016 Aug','2016 Sept','2016 Oct','NA x May', 'NA x June', 'NA x July', 'NA x Aug', 'NA x Sept', 'NA x Oct')
+new_names2 = c('Intercept', 'Non-Amazon','2016 May','2016 June','2016 July','2016 Aug','2016 Sept','2016 Oct','Non-Amazon x May', 'Non-Amazon x June', 'Non-Amazon x July', 'Non-Amazon x Aug', 'Non-Amazon x Sept', 'Non-Amazon x Oct')
+names(didreg.rating.before[["coefficients"]]) <- new_names2
+names(didreg.sentiment.before[["coefficients"]]) <- new_names2
+names(didreg.length.before[["coefficients"]]) <- new_names2
+names(didreg.helpfulness.before[["coefficients"]]) <- new_names2
+names(didreg.image.before[["coefficients"]]) <- new_names2
+coef_cols = names(didreg.rating.before[["coefficients"]])[9:14]
+#new_names = c('NA x 2016 May', 'NA x 2016 June', 'Non-Amazon x 2016 July', 'Non-Amazon x 2016 August', 'Non-Amazon x 2016 September', 'Non-Amazon x 2016 October')
+empty_names = c("","","","","","","","","","","","","","")
+```
+
+```{r}
+library(fixest)
+```
+
+```{r}
+fixest::coefplot(didreg.rating.before, main = '', col='blue', horiz=TRUE, drop=c('Intercept','2016'))
+fixest::coefplot(didreg.sentiment.before, x.shift = .3, add = TRUE, col="red", horiz=TRUE)
+#fixest::coefplot(didreg.length.before, x.shift = .2, add = TRUE, col="darkgreen", horiz=TRUE)
+fixest::coefplot(didreg.helpfulness.before, x.shift = 0.6, add = TRUE, col="darkorange", horiz=TRUE)
+fixest::coefplot(didreg.image.before, x.shift = 0.9, add = TRUE, col="black", horiz=TRUE)
+legend("topright", col = c('blue','red','darkorange','black'), pch = 16, lwd = 1,
+       legend = c("Rating", "Sentiment",'Helpfulness','Image Count'), title = "Standard-Errors")
+```
+
+```{r}
+fixest::coefplot(didreg.length.before, col="darkgreen", horiz=TRUE, drop=c('Intercept','2016'))
+legend("topright", col = c('darkgreen'), pch = 16, lwd = 1,
+       legend = c("Word Count"), title = "Standard-Errors")
+```
+
+
+```{r}
+coefplot(didreg.length.before, col.pts="darkgreen", intercept=TRUE, varnames = new_names, main = 'Word Count', var.las=2)
+```
+
+```{r}
+coefplot(didreg.rating.before, col.pts="black", intercept=TRUE, varnames = new_names, main = 'Rating and Sentiment', )
+coefplot(didreg.sentiment.before, add=TRUE, col.pts="red", intercept=TRUE, varnames = new_names)
+```
+
+```{r}
+coefplot(didreg.helpfulness.before, col.pts="darkorange", intercept=TRUE, varnames = new_names, main = 'Helpfuness and Image Count', )
+coefplot(didreg.image.before, add=TRUE, col.pts="blue", intercept=TRUE, varnames = new_names)
+```
+
+
+```{r, results='asis', echo=FALSE}
+did.before <- did.products[did.products$after_ban == 1,]
+did.before$month <- as.factor(did.before$month)
+didreg.rating.before <- lm(week_rating ~ non_amazon_product * month, data = did.before)
+didreg.sentiment.before <- lm(week_positive ~ non_amazon_product * month, data = did.before)
+didreg.length.before <- lm(week_word_count ~ non_amazon_product * month, data = did.before)
+didreg.helpfulness.before <- lm(week_helpful_yes ~ non_amazon_product * month, data = did.before)
+didreg.image.before <- lm(week_image_count ~ non_amazon_product * month, data = did.before)
+
+stargazer(didreg.rating.before, didreg.sentiment.before, didreg.length.before, didreg.helpfulness.before, didreg.image.before, title="Difference-in-Difference Post-Treatment Check", align=TRUE, type='html', dep.var.labels=c("Rating","Sentiment","Length","Helpfulness", "Image count"))
+```
+

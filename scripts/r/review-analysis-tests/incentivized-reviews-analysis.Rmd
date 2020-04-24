@@ -1,0 +1,71 @@
+---
+title: "Incentivized reviews analysis"
+author: "Eugenie"
+date: "17/02/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load Source File
+
+Data pre-processing is included, where special chars and minimal stop-words are removed.
+```{r echo=T, results='hide', message=F, warning=F}
+library(data.table)
+## load review data
+source("~/Dropbox/Eugenie/scripts/libs.R")
+```
+
+```{r, include=FALSE}
+# Load review data
+reviews3.csv <- read.csv("~/Dropbox/Eugenie/data/processed_reviewMeta/merged-reviews.csv")
+reviews3.csv$date <- as.Date(reviews3.csv$date, "%Y-%m-%d")
+# Load brand data
+cable_brands <- read_excel("~/Dropbox/Eugenie/data/ReviewMeta_Amazon_Data/amazon-cables.xlsx")
+```
+
+
+# Data Processing
+
+```{r, include=FALSE}
+# Drop records before 2013.
+reviews3.csv <- reviews3.csv[as.numeric(as.character(reviews3.csv$year))>2015,]
+# Drop records with no product category.
+reviews3.csv <- reviews3.csv[reviews3.csv$product_cat != 'none',]
+# Get selected columns for further analysis.
+#reviews.product <- reviews3.csv[,c('recid','item_id','child_id', 'incentivized','product_cat','rating','word_count','helpful_yes','date','year','month','week')]
+```
+
+```{r, include=FALSE}
+# Add 'after_ban' label
+reviews3.csv['after_ban'] <- ifelse(reviews3.csv$date>'2016-10-02',1,0)
+reviews3.csv$after_ban <- as.factor(reviews3.csv$after_ban)
+```
+
+# Incentivized reviews
+
+```{r}
+incent.csv <- reviews3.csv[reviews3.csv$incentivized == 'incentivized',]
+incent.before <- incent.csv[incent.csv$after_ban == 0,]
+incent.after <- incent.csv[incent.csv$after_ban == 1,]
+```
+
+```{r}
+# Write incentive_text
+write.csv(incent.before$incentive_text, 'reviewMeta_before_incentive_text.csv')
+```
+
+# Non-incentivized reviews
+
+```{r}
+nonincent.csv <- reviews3.csv[reviews3.csv$incentivized == 'non-incentivized',]
+nonincent.before <- incent.csv[incent.csv$after_ban == 0,]
+```
+
+```{r}
+# Write incentive_text
+write.csv(nonincent.before$text, 'reviewMeta_before_nonincentive_text.csv')
+```
+

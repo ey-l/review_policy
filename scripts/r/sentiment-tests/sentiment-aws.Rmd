@@ -1,0 +1,199 @@
+---
+title: "AWS Comprehend Sentiment Results"
+author: "Eugenie"
+date: "30/07/2019"
+output: 
+  html_document:
+    toc: true
+    number_sections: true
+---
+
+<style>
+
+table, td, th {
+  border: none;
+  padding-left: 1em;
+  padding-right: 1em;
+  min-width: 50%;
+  margin-left: auto;
+  margin-right: auto;
+  margin-top: 1em;
+  margin-bottom: 1em;
+}
+
+</style>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load Source File and Libraries
+
+Load source files and libraries.
+```{r, include=FALSE}
+## read .xlsx files
+library(readxl)
+
+## plotting
+library(ggplot2)
+library(GGally)
+
+## pretty tables
+library(stargazer)
+library(broom)
+library(knitr)
+
+########################## load source files ############################
+source("~/Dropbox/Eugenie/scripts/utils.R")
+aws_reviews <- read.csv("~/Dropbox/Eugenie/data/processed/aws-reviews2-all.csv")
+good_asin <- read_excel('~/Dropbox/Eugenie/data/raw/good_asin.xlsx')
+
+```
+
+
+# Sentiment Analysis 
+## Data processing
+1. Get relevant columns.
+```{r, include=FALSE}
+cols <- c('recid','item_id','child_id','rating','incentivized','is_deleted','verified_purchaser')
+## merge with more columns
+reviews2.temp <- merge(aws_reviews, reviews2.csv[,cols])
+
+```
+
+2. Add product category.
+```{r, include=FALSE}
+reviews2.temp['phone_batteries'] <- ifelse(reviews2.temp$item_id %in% good_asin$`PHONE BATTERIES` | 
+                                             reviews2.temp$child_id %in% good_asin$`PHONE BATTERIES`, 1, 0)
+reviews2.temp['phone_cables'] <- ifelse(reviews2.temp$item_id %in% good_asin$`PHONE CABLES` | 
+                                          reviews2.temp$child_id %in% good_asin$`PHONE CABLES`, 1, 0)
+reviews2.temp['screen_protectors'] <- ifelse(reviews2.temp$item_id %in% good_asin$`SCREEN PROTECTORS` | 
+                                               reviews2.temp$child_id %in% good_asin$`SCREEN PROTECTORS`, 1, 0)
+
+## drop this column when saving the result; this is just for better plotting and analysis
+reviews2.temp['product_cat'] <- ifelse(reviews2.temp$phone_batteries == 1, 'phone_batteries', 
+                                       ifelse(reviews2.temp$phone_cables == 1, 'phone_cables', 
+                                              ifelse(reviews2.temp$screen_protectors == 1, 'screen_protectors', 'none')))
+reviews2.temp$product_cat <- as.factor(reviews2.temp$product_cat)
+```
+
+## Overview stats
+### Summary stats on sentiment probabilities
+```{r, results='asis', echo=FALSE}
+stargazer(reviews2.temp[,c('mixed','negative','neutral','positive')],type='html')
+```
+
+Observations:
+
+* based on the percentiles and mean, there're more positive reviews than negative reviews, which aligns with our previous findings (e.g., over 70% of the total reviews have a 5-star rating)
+
+* we also see less mixed and neutral reviews compared to negative and positive reviews. This aligns with the rating distribution (see 'data-exp-rating.html' for details)
+
+### Probability mean grouped by incentivized vs non-incentivized reviews
+```{r, echo=FALSE}
+knitr::kable(reviews2.temp[,c('incentivized','mixed','negative','neutral','positive')] %>%
+  group_by(incentivized) %>%
+  summarize_all(mean, na.rm = TRUE))
+```
+
+Observations:
+
+* Notice a 14% difference in the positive sentiment probability between the two groups
+
+* The negative sentiment probability difference is notable as well
+
+
+## Linear fixed effect models
+### Fixed effect on item_id
+```{r, results='asis', echo=FALSE}
+# in model.item.x, index = c('item_id') defines 'item_id' as the entity
+formula.fe <- mixed ~ incentivized + is_deleted + verified_purchaser
+model.item.1 <- plm(data = reviews2.temp, formula = formula.fe, index = c('item_id'), model = 'within')
+
+formula.fe <- negative ~ incentivized + is_deleted + verified_purchaser
+model.item.2 <- plm(data = reviews2.temp, formula = formula.fe, index = c('item_id'), model = 'within')
+
+formula.fe <- neutral ~ incentivized + is_deleted + verified_purchaser
+model.item.3 <- plm(data = reviews2.temp, formula = formula.fe, index = c('item_id'), model = 'within')
+
+formula.fe <- positive ~ incentivized + is_deleted + verified_purchaser
+model.item.4 <- plm(data = reviews2.temp, formula = formula.fe, index = c('item_id'), model = 'within')
+
+stargazer(model.item.1, model.item.2, model.item.3, model.item.4, 
+          title="Linear Model Results with Fixed Effect on item_id", align=TRUE, type = 'html')
+```
+
+Observations:
+
+* Stats related to both positive and negative sentiment probability are strongly significant, while mixed and neutral are not significant for some groups (i.e., mixed-incentivized, neutral-is_deleted)
+
+
+### Fixed effect on product_cat
+Drop reviews with unidentified product_cat for now.
+```{r, results='asis', echo=FALSE}
+## filter out reviews with unidentified product_cat
+reviews2.temp <- reviews2.temp[reviews2.temp$product_cat!='none',]
+
+# in model.item.x, index = c('product_cat') defines 'product_cat' as the entity
+formula.fe <- mixed ~ incentivized + is_deleted + verified_purchaser
+model.item.1 <- plm(data = reviews2.temp, formula = formula.fe, index = c('product_cat'), model = 'within')
+
+formula.fe <- negative ~ incentivized + is_deleted + verified_purchaser
+model.item.2 <- plm(data = reviews2.temp, formula = formula.fe, index = c('product_cat'), model = 'within')
+
+formula.fe <- neutral ~ incentivized + is_deleted + verified_purchaser
+model.item.3 <- plm(data = reviews2.temp, formula = formula.fe, index = c('product_cat'), model = 'within')
+
+formula.fe <- positive ~ incentivized + is_deleted + verified_purchaser
+model.item.4 <- plm(data = reviews2.temp, formula = formula.fe, index = c('product_cat'), model = 'within')
+
+stargazer(model.item.1, model.item.2, model.item.3, model.item.4, 
+          title="Linear Model Results with Fixed Effect on product_cat", align=TRUE, type = 'html')
+```
+
+## Correlation: rating vs. sentiment probability
+
+### Correlation matrix
+```{r}
+ggcorr(reviews2.temp[,c('rating','mixed','negative','neutral','positive')], nbreaks = 7)
+```
+
+The correlation between the sentiment results and rating is stronger than all other methods we have tried.
+
+### Correlation tests
+```{r, echo=FALSE}
+cor.1 <- cor.test(reviews2.temp$rating, reviews2.temp$mixed, method=c("pearson", "kendall", "spearman"))
+cor.2 <- cor.test(reviews2.temp$rating, reviews2.temp$negative, method=c("pearson", "kendall", "spearman"))
+cor.3 <- cor.test(reviews2.temp$rating, reviews2.temp$neutral, method=c("pearson", "kendall", "spearman"))
+cor.4 <- cor.test(reviews2.temp$rating, reviews2.temp$positive, method=c("pearson", "kendall", "spearman"))
+```
+
+The p-value for all four sentiment classes are < 2.2e-16.
+
+#### Rating vs. mixed
+```{r, results='asis', echo=FALSE}
+cor.sum.1 <- broom::glance(cor.1)
+cor.sum.2 <- broom::glance(cor.2)
+cor.sum.3 <- broom::glance(cor.3)
+cor.sum.4 <- broom::glance(cor.4)
+
+print(knitr::kable(cor.sum.1,floating.environment="sidewaystable"))
+```
+
+#### Rating vs. negative
+```{r, results='asis', echo=FALSE}
+print(knitr::kable(cor.sum.2,floating.environment="sidewaystable"))
+```
+
+#### Rating vs. neutral
+```{r, results='asis', echo=FALSE}
+print(knitr::kable(cor.sum.3,floating.environment="sidewaystable"))
+```
+
+#### Rating vs. positive
+```{r, results='asis', echo=FALSE}
+print(knitr::kable(cor.sum.4,floating.environment="sidewaystable"))
+```
+
+
+

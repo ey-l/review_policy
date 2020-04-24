@@ -1,0 +1,268 @@
+---
+title: "Data Exploration and Plots"
+author: "Eugenie"
+date: "02/07/2019"
+output: 
+  html_document:
+    toc: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, include=FALSE}
+## for data manipulation
+library(plyr)
+library(dplyr)
+library(reshape)
+
+## for plotting
+library(ggplot2)
+library(ggmosaic)
+library(plotly)
+library(ggpubr)
+
+## for modelling
+library(plm)
+library(mgcv)
+library(GoodmanKruskal)
+```
+
+
+# Plots
+Load data. Please check the file path.
+```{r}
+reviews2.csv <- read.csv('~/Dropbox/Eugenie/data/arslan-reviews2.csv')
+```
+
+Turn numeric values to factors.
+```{r}
+## turn numeric values to factors
+reviews2.csv$is_deleted <- as.factor(reviews2.csv$is_deleted)
+reviews2.csv$incentivized <- as.factor(reviews2.csv$incentivized)
+reviews2.csv$verified_purchaser <- as.factor(reviews2.csv$verified_purchaser)
+
+## change level values
+levels(reviews2.csv$verified_purchaser) <- c("unverified", "verified")
+levels(reviews2.csv$incentivized) <- c("non-incentivized", "incentivized")
+levels(reviews2.csv$is_deleted) <- c("kept", "deleted")
+```
+
+
+## Plot incentivized vs. non-incentivized reviews
+
+```{r, echo=FALSE}
+## plot incentivized vs. non-incentivized reviews
+p1 <- ggplot(reviews2.csv[reviews2.csv$incentivized == 'incentivized',], aes(x=rating))+ 
+  geom_bar()+
+  geom_text(stat='count', aes(label=..count..), vjust=-1)+
+  labs(x='incentivized')
+p0 <- ggplot(reviews2.csv[reviews2.csv$incentivized == 'non-incentivized',], aes(x=rating))+ 
+  geom_bar()+
+  geom_text(stat='count', aes(label=..count..), vjust=-1)+
+  labs(x='non-incentivized')
+
+subplot(
+  ggplotly(p0),
+  ggplotly(p1),
+  nrows = 1, margin = 0.005,
+  titleX = TRUE
+)
+```
+
+
+## Rating distribution by group
+Get the mean of incentivized vs. non-incentivized reviews
+```{r}
+aggregate(reviews2.csv[, 'rating'], list(reviews2.csv$incentivized), mean)
+```
+
+Get the mean of is_deleted vs. non-deleted reviews
+```{r}
+aggregate(reviews2.csv[, 'rating'], list(reviews2.csv$is_deleted), mean)
+```
+
+Get the mean of verified_purchaser vs. non-verified_purchaser reviews
+```{r}
+aggregate(reviews2.csv[, 'rating'], list(reviews2.csv$verified_purchaser), mean)
+```
+
+```{r, echo=FALSE}
+## plot percentage distribution: incentivized
+
+p1 <- ggplot(data=reviews2.csv, aes(incentivized))+
+  geom_bar(aes(fill=as.factor(rating)), position="fill")+
+  scale_fill_brewer(palette="RdBu")
+
+p1 <- ggplotly(p1)
+
+## plot percentage distribution: is_deleted
+p2 <- ggplot(data=reviews2.csv, aes(is_deleted))+
+  geom_bar(aes(fill=as.factor(rating)), position="fill")+
+  scale_fill_brewer(palette="RdBu")
+
+p2 <- ggplotly(p2)
+
+## plot percentage distribution: verified_purchaser
+p3 <- ggplot(data=reviews2.csv, aes(verified_purchaser))+
+  geom_bar(aes(fill=as.factor(rating)), position="fill")+
+  scale_fill_brewer(palette="RdBu")
+
+p3 <- ggplotly(p3)
+
+subplot(
+  style(p1, showlegend = FALSE),
+  style(p2, showlegend = FALSE),
+  p3, 
+  nrows = 1, margin = 0.005,
+  shareY = TRUE, titleX = TRUE
+)
+```
+
+## Group distribution
+### Group distribution stats
+#### Stats sub-grouped by verified reviews
+Counts sub-grouped by verified reviews.
+```{r, echo=FALSE}
+table(reviews2.csv[,c('incentivized', 'is_deleted', 'verified_purchaser')])
+```
+
+Percentage sub-grouped by verified reviews.
+```{r, echo=FALSE}
+## get the percentage of each group
+reviews2.summary <- data.frame(table(reviews2.csv[,c('incentivized', 'is_deleted', 'verified_purchaser')]))
+reviews2.summary <- ddply(reviews2.summary, .(verified_purchaser), mutate, Freq_pct = Freq/sum(Freq)*100)
+
+## cast for readibility
+cast(reviews2.summary, incentivized~is_deleted~verified_purchaser, mean, value = 'Freq_pct')
+```
+It's interesting that:
+
+- A much higher percentage of incentivized reviews are made by unverified purchasers compared to verified (looking at the bottom row of the two tables)
+
+- If you are a verified purchaser, your non-incentivized reviews are more likely to be kept (94.051% vs. 79.637%)
+
+- A higher percentage of non-incentivized reviews from unverified purchasers (11.051%) are deleted than those from verified purchasers (5.852%)
+
+- A higher percentage of incentivized reviews from unverified purchasers (1.016%) are kept than those from verified purchasers (0.035%)
+
+The following stats (sub-grouped by the other two review categories and distribution by every combination of the groups) are for verifying the findings.
+
+#### Stats sub-grouped by deleted reviews
+Percentage sub-grouped by is_deleted
+```{r, echo=FALSE}
+## get the percentage of each group
+reviews2.summary <- data.frame(table(reviews2.csv[,c('verified_purchaser', 'incentivized', 'is_deleted')]))
+reviews2.summary <- ddply(reviews2.summary, .(is_deleted), mutate, Freq_pct = Freq/sum(Freq)*100)
+
+## cast for readibility
+cast(reviews2.summary, verified_purchaser~incentivized~is_deleted, mean, value = 'Freq_pct')
+```
+
+#### Stats sub-grouped by incentivized reviews
+Percentage sub-grouped by incentivized
+```{r, echo=FALSE}
+## get the percentage of each group
+reviews2.summary <- data.frame(table(reviews2.csv[,c('verified_purchaser', 'is_deleted', 'incentivized')]))
+reviews2.summary <- ddply(reviews2.summary, .(incentivized), mutate, Freq_pct = Freq/sum(Freq)*100)
+
+## cast for readibility
+cast(reviews2.summary, verified_purchaser~is_deleted~incentivized, mean, value = 'Freq_pct')
+```
+
+#### Percentage of each group
+```{r, echo=FALSE}
+## get the percentage of each group
+reviews2.summary <- data.frame(table(reviews2.csv[,c('verified_purchaser', 'is_deleted', 'incentivized')]))
+reviews2.summary <- ddply(reviews2.summary, .(), mutate, Freq_pct = Freq/sum(Freq)*100)
+
+## show selected columns
+reviews2.summary[,c('incentivized', 'is_deleted', 'verified_purchaser', 'Freq', 'Freq_pct')]
+```
+
+
+### Plots for group distribution
+#### Mosaic plots to visualize all three categories
+Plot three groups together with a mosaic plot with facets on verified reviews
+```{r, echo=FALSE}
+ggplotly(ggplot(data = reviews2.csv) +
+  geom_mosaic(aes(x = product(incentivized, is_deleted), fill=incentivized), na.rm=TRUE)+
+  facet_grid(verified_purchaser~.)+
+  labs(x='is deleted?'))
+```
+
+Plot three groups together with a mosaic plot
+```{r, echo=FALSE}
+ggplotly(ggplot(data = reviews2.csv) +
+  geom_mosaic(aes(x = product(verified_purchaser, is_deleted), fill=incentivized), na.rm=TRUE)+
+  labs(x='incentivized:is_deleted'))
+```
+
+
+#### Bar charts to visualize the combination of any two categories
+Plot the proportion of deleted reviews in non-/incentivized group
+```{r, echo=FALSE}
+ggplotly(ggplot(data=reviews2.csv, aes(incentivized))+
+  geom_bar(aes(fill=is_deleted), position="fill"))
+```
+
+
+Plot the proportion of verified reviews in non-/incentivized group
+```{r, echo=FALSE}
+ggplotly(ggplot(data=reviews2.csv, aes(incentivized))+
+  geom_bar(aes(fill=verified_purchaser), position="fill"))
+```
+
+
+Plot the proportion of verified reviews in non-/deleted group
+```{r, echo=FALSE}
+ggplotly(ggplot(data=reviews2.csv, aes(is_deleted))+
+  geom_bar(aes(fill=verified_purchaser), position="fill"))
+```
+
+
+## Group Correlation
+### Chi-square tests on pairs of the three groups
+Incentivized vs. is_deleted
+```{r}
+chisq.test(reviews2.csv$incentivized, reviews2.csv$is_deleted, correct = FALSE)
+```
+
+Incentivized vs. verified_purchaser
+```{r}
+chisq.test(reviews2.csv$incentivized, reviews2.csv$verified_purchaser, correct = FALSE)
+```
+
+Is_deleted vs. verified_purchaser
+```{r}
+chisq.test(reviews2.csv$is_deleted, reviews2.csv$verified_purchaser, correct = FALSE)
+```
+
+From the tests above, there correlation between the pairs are significant. Is there a way to find out the correlation between three categorical variables?
+
+### Effect size
+Goodman and Kruskal's tau to calculate the effect size (strength of association). Although the results of chi-square tests suggest the significance of the association between the groups, the effect size result shows they are not good predictors of one another.
+```{r}
+reviews2.temp <- reviews2.csv[,c('incentivized', 'is_deleted', 'verified_purchaser')]
+GKmatrix1<- GKtauDataframe(reviews2.temp)
+plot(GKmatrix1, corrColors = "blue")
+```
+
+
+# Models and Tests
+## Formula
+```{r}
+formula.fe <- rating ~ incentivized + is_deleted + verified_purchaser
+```
+
+## linear fixed effect model for review2.csv
+```{r}
+# in model.fe, index = c('item_id') defines 'item_id' as the entity
+model.fe <- plm(data = reviews2.csv, formula = formula.fe, index = c('item_id'), model = 'within')
+# get the model summary
+summary(model.fe)
+```
+From the result of the linear fixed effect modelling, the null hypothesis of the independency of products is rejected. 

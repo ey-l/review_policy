@@ -1,0 +1,437 @@
+---
+title: "Exploratory Analysis on Review Length, Number of Helpful Yes's, and Images Included"
+author: "Eugenie"
+date: "14/07/2019"
+output: 
+  html_document:
+    toc: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, include=FALSE}
+## for data manipulation
+library(plyr)
+library(dplyr)
+library(reshape)
+
+## for plotting
+library(ggplot2)
+library(ggmosaic)
+library(plotly)
+library(ggpubr)
+
+## for modelling
+library(plm)
+library(mgcv)
+library(GoodmanKruskal)
+```
+
+
+# Data Processing
+Load data. Please check the file path.
+```{r}
+reviews2.csv <- read.csv('~/Dropbox/Eugenie/data/raw/arslan-reviews2.csv')
+```
+
+Turn numeric values to factors.
+```{r}
+## turn numeric values to factors
+reviews2.csv$is_deleted <- as.factor(reviews2.csv$is_deleted)
+reviews2.csv$incentivized <- as.factor(reviews2.csv$incentivized)
+reviews2.csv$verified_purchaser <- as.factor(reviews2.csv$verified_purchaser)
+
+## change level values
+levels(reviews2.csv$verified_purchaser) <- c("unverified", "verified")
+levels(reviews2.csv$incentivized) <- c("non-incentivized", "incentivized")
+levels(reviews2.csv$is_deleted) <- c("kept", "deleted")
+```
+
+Turn factors to numeric
+```{r}
+reviews2.csv$helpful_total <- as.numeric(as.character(reviews2.csv$helpful_total))
+reviews2.csv$helpful_yes <- as.numeric(as.character(reviews2.csv$helpful_yes))
+reviews2.csv$image_count <- as.numeric(as.character(reviews2.csv$image_count))
+#reviews2.csv$video <- as.numeric(as.character(reviews2.csv$video))
+```
+
+
+
+# Review Length Exploratory Analysis
+## Plots
+### Plot incentivized vs. non-incentivized reviews
+
+```{r, echo=FALSE}
+## plot incentivized vs. non-incentivized reviews
+p1 <- ggplot(reviews2.csv[reviews2.csv$incentivized == 'incentivized',], aes(x=word_count))+
+  geom_histogram(binwidth = 50)+
+  labs(x='incentivized')
+p0 <- ggplot(reviews2.csv[reviews2.csv$incentivized == 'non-incentivized',], aes(x=word_count))+ 
+  geom_histogram(binwidth = 50)+
+  labs(x='non-incentivized')
+
+subplot(
+  ggplotly(p0),
+  ggplotly(p1),
+  nrows = 1, margin = 0.005,
+  titleX = TRUE
+)
+```
+
+
+### Review length distribution by group
+Get the mean of incentivized vs. non-incentivized reviews
+```{r}
+aggregate(reviews2.csv[, 'word_count'], list(reviews2.csv$incentivized), mean)
+```
+
+Get the mean of is_deleted vs. non-deleted reviews
+```{r}
+aggregate(reviews2.csv[, 'word_count'], list(reviews2.csv$is_deleted), mean)
+```
+
+Get the mean of verified_purchaser vs. non-verified_purchaser reviews
+```{r}
+aggregate(reviews2.csv[, 'word_count'], list(reviews2.csv$verified_purchaser), mean)
+```
+
+Bin review length by 50 for further analysis
+```{r}
+## binning length
+bins <- c(-1,50,100,150,200,250,500,Inf)
+reviews2.csv.binned <- reviews2.csv[,c('recid','item_id','rating','helpful_yes','helpful_total',
+                                       'image_count','word_count','brand_repeat',
+                                       'incentivized','is_deleted','verified_purchaser')]
+reviews2.csv.binned$word_count <- cut(reviews2.csv.binned$word_count, breaks=bins, labels=c('0-50','50-100','100-150','150-200','200-250','250-500','500+'))
+
+```
+
+```{r, echo=FALSE}
+## plot percentage distribution: incentivized
+
+p1 <- ggplot(data=reviews2.csv.binned, aes(incentivized))+
+  geom_bar(aes(fill=as.factor(word_count)), position="fill")+
+  scale_fill_brewer(palette="RdBu")
+
+p1 <- ggplotly(p1)
+
+## plot percentage distribution: is_deleted
+p2 <- ggplot(data=reviews2.csv.binned, aes(is_deleted))+
+  geom_bar(aes(fill=as.factor(word_count)), position="fill")+
+  scale_fill_brewer(palette="RdBu")
+
+p2 <- ggplotly(p2)
+
+## plot percentage distribution: verified_purchaser
+p3 <- ggplot(data=reviews2.csv.binned, aes(verified_purchaser))+
+  geom_bar(aes(fill=as.factor(word_count)), position="fill")+
+  scale_fill_brewer(palette="RdBu")
+
+p3 <- ggplotly(p3)
+
+subplot(
+  style(p1, showlegend = FALSE),
+  style(p2, showlegend = FALSE),
+  p3, 
+  nrows = 1, margin = 0.005,
+  shareY = TRUE, titleX = TRUE
+)
+```
+
+
+## Models and Tests on Review Length
+### Formula
+```{r}
+formula.fe <- word_count ~ incentivized + is_deleted + verified_purchaser
+```
+
+### linear fixed effect model for review2.csv on review length
+```{r}
+# in model.fe, index = c('item_id') defines 'item_id' as the entity
+model.fe <- plm(data = reviews2.csv, formula = formula.fe, index = c('item_id'), model = 'within')
+# get the model summary
+summary(model.fe)
+```
+From the result of the linear fixed effect modelling, the null hypothesis of the independency of products is rejected. 
+
+
+
+
+# Review Number of Helpful Yes and Total Exploratory Analysis
+## Plots
+### Summary stats
+```{r}
+summary(reviews2.csv$helpful_total)
+```
+
+```{r}
+summary(reviews2.csv$helpful_yes)
+```
+Over 80% of the reviews have a NULL number of helpful_total and helpful_yes.
+
+```{r}
+summary(reviews2.csv$helpful_total-reviews2.csv$helpful_yes)
+```
+Observe negative numbers where the number of helpful_total is smaller than the number of helpful_yes. Not sure how this happened. For the simplicity of the further analysis, we'll only focus on the number of helpful_yes for now.
+
+```{r}
+table(reviews2.csv[is.na(reviews2.csv$helpful_yes),c('incentivized')])
+```
+Not sure how the NA's are generated but a large number of NA's are from non-incentivized reviews.
+
+### Plot of the number of helpful yes of incentivized vs. non-incentivized reviews
+NA's are not included, so it only plots < 20% of the reviews
+```{r, echo=FALSE}
+## plot incentivized vs. non-incentivized reviews
+p1 <- ggplot(reviews2.csv[reviews2.csv$incentivized == 'incentivized',], aes(x=helpful_yes))+
+  geom_histogram(binwidth = 5)+
+  labs(x='incentivized')
+p0 <- ggplot(reviews2.csv[reviews2.csv$incentivized == 'non-incentivized',], aes(x=helpful_yes))+ 
+  geom_histogram(binwidth = 5)+
+  labs(x='non-incentivized')
+
+subplot(
+  ggplotly(p0),
+  ggplotly(p1),
+  nrows = 1, margin = 0.005,
+  titleX = TRUE
+)
+```
+
+### Plot of the number of helpful total of incentivized vs. non-incentivized reviews
+NA's are not included, so it only plots < 20% of the reviews
+```{r, echo=FALSE}
+## plot incentivized vs. non-incentivized reviews
+p1 <- ggplot(reviews2.csv[reviews2.csv$incentivized == 'incentivized',], aes(x=helpful_total))+
+  geom_histogram(binwidth = 5)+
+  labs(x='incentivized')
+p0 <- ggplot(reviews2.csv[reviews2.csv$incentivized == 'non-incentivized',], aes(x=helpful_total))+ 
+  geom_histogram(binwidth = 5)+
+  labs(x='non-incentivized')
+
+subplot(
+  ggplotly(p0),
+  ggplotly(p1),
+  nrows = 1, margin = 0.005,
+  titleX = TRUE
+)
+```
+
+### Number of helpful_yes distribution by group
+Reviews with NA number of helpful_yes are omitted.
+
+Get the mean of incentivized vs. non-incentivized reviews
+```{r}
+aggregate(reviews2.csv[!is.na(reviews2.csv$helpful_yes), 'helpful_yes'], list(reviews2.csv[!is.na(reviews2.csv$helpful_yes),]$incentivized), mean)
+```
+
+Get the mean of is_deleted vs. non-deleted reviews
+```{r}
+aggregate(reviews2.csv[!is.na(reviews2.csv$helpful_yes), 'helpful_yes'], list(reviews2.csv[!is.na(reviews2.csv$helpful_yes),]$is_deleted), mean)
+```
+
+Get the mean of verified_purchaser vs. non-verified_purchaser reviews
+```{r}
+aggregate(reviews2.csv[!is.na(reviews2.csv$helpful_yes), 'helpful_yes'], list(reviews2.csv[!is.na(reviews2.csv$helpful_yes),]$verified_purchaser), mean)
+```
+
+Bin number of helpful_yes by 5 for further analysis
+```{r}
+## binning length
+bins <- c(-1,5,10,Inf)
+reviews2.csv.binned$helpful_yes <- cut(reviews2.csv.binned$helpful_yes, breaks=bins, labels=c('0-5','5-10','10+'))
+
+```
+
+```{r, echo=FALSE}
+## plot percentage distribution: incentivized
+
+p1 <- ggplot(data=reviews2.csv.binned, aes(incentivized))+
+  geom_bar(aes(fill=as.factor(helpful_yes)), position="fill")+
+  scale_fill_discrete(na.value='white')
+
+p1 <- ggplotly(p1)
+
+## plot percentage distribution: is_deleted
+p2 <- ggplot(data=reviews2.csv.binned, aes(is_deleted))+
+  geom_bar(aes(fill=as.factor(helpful_yes)), position="fill")+
+  scale_fill_discrete(na.value='white')
+
+p2 <- ggplotly(p2)
+
+## plot percentage distribution: verified_purchaser
+p3 <- ggplot(data=reviews2.csv.binned, aes(verified_purchaser))+
+  geom_bar(aes(fill=as.factor(helpful_yes)), position="fill")+
+  scale_fill_discrete(na.value='white')
+
+p3 <- ggplotly(p3)
+
+subplot(
+  style(p1, showlegend = FALSE),
+  style(p2, showlegend = FALSE),
+  p3, 
+  nrows = 1, margin = 0.005,
+  shareY = TRUE, titleX = TRUE
+)
+```
+
+It's interesting to see there're more helpful yes counts in the incentivized reviews vs. non-incentivized.
+
+## Models and Tests on Number of helpful_yes
+### Formula
+```{r}
+formula.fe <- helpful_yes ~ incentivized + is_deleted + verified_purchaser
+```
+
+### linear fixed effect model for review2.csv on number of helpful_yes without setting NA's to 0
+```{r}
+# in model.fe, index = c('item_id') defines 'item_id' as the entity
+model.fe <- plm(data = reviews2.csv, formula = formula.fe, index = c('item_id'), model = 'within')
+# get the model summary
+summary(model.fe)
+```
+ 
+
+### linear fixed effect model for review2.csv on number of helpful_yes with setting NA's to 0
+```{r}
+data <- reviews2.csv[,c('item_id','helpful_yes','incentivized','is_deleted','verified_purchaser')]
+data[is.na(data)] <- 0
+# in model.fe, index = c('item_id') defines 'item_id' as the entity
+model.fe <- plm(data = data, formula = formula.fe, index = c('item_id'), model = 'within')
+# get the model summary
+summary(model.fe)
+```
+From the result of the linear fixed effect modelling, the null hypothesis of the independency of products is rejected. 
+
+It's surprising to me that setting all NA's to zeros would make such a difference. 
+
+
+# Review Number of Image Included Exploratory Analysis
+## Plots
+### Summary stats
+```{r}
+summary(reviews2.csv$image_count)
+```
+
+Over 80% of the reviews have a NULL number of image_count.
+
+```{r}
+image_count.summary <- data.frame(table(reviews2.csv[is.na(reviews2.csv$image_count),c('incentivized')]))
+image_count.summary <- ddply(image_count.summary, .(), mutate, Freq_pct = Freq/sum(Freq)*100)
+image_count.summary[,2:ncol(image_count.summary)]
+```
+Not sure how the NA's are generated but a large number of NA's are from non-incentivized reviews.
+
+### Plot of the number of helpful yes of incentivized vs. non-incentivized reviews
+NA's are not included, so it only plots < 20% of the reviews
+```{r, echo=FALSE}
+## plot incentivized vs. non-incentivized reviews
+p1 <- ggplot(reviews2.csv[reviews2.csv$incentivized == 'incentivized',], aes(x=image_count))+
+  geom_histogram(binwidth = 5)+
+  labs(x='incentivized')
+p0 <- ggplot(reviews2.csv[reviews2.csv$incentivized == 'non-incentivized',], aes(x=image_count))+ 
+  geom_histogram(binwidth = 5)+
+  labs(x='non-incentivized')
+
+subplot(
+  ggplotly(p0),
+  ggplotly(p1),
+  nrows = 1, margin = 0.005,
+  titleX = TRUE
+)
+```
+
+
+### Number of image_count distribution by group
+Reviews with NA number of image_count are omitted.
+
+Get the mean of incentivized vs. non-incentivized reviews
+```{r}
+aggregate(reviews2.csv[!is.na(reviews2.csv$image_count), 'image_count'], list(reviews2.csv[!is.na(reviews2.csv$image_count),]$incentivized), mean)
+```
+
+Get the mean of is_deleted vs. non-deleted reviews
+```{r}
+aggregate(reviews2.csv[!is.na(reviews2.csv$image_count), 'image_count'], list(reviews2.csv[!is.na(reviews2.csv$image_count),]$is_deleted), mean)
+```
+
+Get the mean of verified_purchaser vs. non-verified_purchaser reviews
+```{r}
+aggregate(reviews2.csv[!is.na(reviews2.csv$image_count), 'image_count'], list(reviews2.csv[!is.na(reviews2.csv$image_count),]$verified_purchaser), mean)
+```
+
+Bin number of image_count by 5 for further analysis
+```{r}
+## binning length
+bins <- c(-1,5,10,Inf)
+reviews2.csv.binned$image_count <- cut(reviews2.csv.binned$image_count, breaks=bins, labels=c('0-5','5-10','10+'))
+
+```
+
+```{r, echo=FALSE}
+## plot percentage distribution: incentivized
+
+p1 <- ggplot(data=reviews2.csv.binned, aes(incentivized))+
+  geom_bar(aes(fill=as.factor(image_count)), position="fill")+
+  scale_fill_discrete(na.value='white')
+
+p1 <- ggplotly(p1)
+
+## plot percentage distribution: is_deleted
+p2 <- ggplot(data=reviews2.csv.binned, aes(is_deleted))+
+  geom_bar(aes(fill=as.factor(image_count)), position="fill")+
+  scale_fill_discrete(na.value='white')
+
+p2 <- ggplotly(p2)
+
+## plot percentage distribution: verified_purchaser
+p3 <- ggplot(data=reviews2.csv.binned, aes(verified_purchaser))+
+  geom_bar(aes(fill=as.factor(image_count)), position="fill")+
+  scale_fill_discrete(na.value='white')
+
+p3 <- ggplotly(p3)
+
+subplot(
+  style(p1, showlegend = FALSE),
+  style(p2, showlegend = FALSE),
+  p3, 
+  nrows = 1, margin = 0.005,
+  shareY = TRUE, titleX = TRUE
+)
+```
+
+It's interesting to see there're more image counts in the incentivized reviews vs. non-incentivized.
+
+## Models and Tests on Number of image_count
+### Formula
+```{r}
+formula.fe <- image_count ~ incentivized + is_deleted + verified_purchaser
+```
+
+### linear fixed effect model for review2.csv on number of image_count without setting NA's to 0
+```{r}
+# in model.fe, index = c('item_id') defines 'item_id' as the entity
+model.fe <- plm(data = reviews2.csv, formula = formula.fe, index = c('item_id'), model = 'within')
+# get the model summary
+summary(model.fe)
+```
+ 
+
+### linear fixed effect model for review2.csv on number of image_count with setting NA's to 0
+```{r}
+data <- reviews2.csv[,c('item_id','image_count','incentivized','is_deleted','verified_purchaser')]
+data[is.na(data)] <- 0
+# in model.fe, index = c('item_id') defines 'item_id' as the entity
+model.fe <- plm(data = data, formula = formula.fe, index = c('item_id'), model = 'within')
+# get the model summary
+summary(model.fe)
+```
+
+The difference is not as big as the fixed effect linear model of the helpful_yes even when all NA's are set to zeros.
+
+
+

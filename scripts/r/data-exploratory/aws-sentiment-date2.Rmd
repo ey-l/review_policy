@@ -1,0 +1,316 @@
+---
+title: "AWS Sentiment & Review Date/Time Part 2"
+author: "Eugenie"
+date: "07/08/2019"
+output: 
+  html_document:
+    toc: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load Source File
+
+Data pre-processing is included, where special chars and minimal stop-words are removed.
+```{r echo=T, results='hide', message=F, warning=F}
+## load review data
+source("~/Dropbox/Eugenie/scripts/utils.R")
+```
+
+Load AWS review sentiment data.
+```{r}
+#aws_reviews <- read.csv("~/Dropbox/Eugenie/data/processed/sentiment/aws-reviews2-all.csv")
+reviews3.csv <- read.csv("~/Dropbox/Eugenie/data/processed/processed-reviews3.csv")
+```
+
+
+# Data Processing
+Add category data as extra columns. Join on either item_id or child_id.
+```{r}
+#reviews2.temp <- reviews2.csv
+
+reviews.product <- reviews3.csv[,c('recid','item_id','incentivized','product_cat','rating','word_count','helpful_yes','date','year','month','weeks','positive','neutral')]
+
+names(reviews.product) <- c('recid','item_id','incentivized','product_cat','rating','word_count','helpful_yes','date','year','month','week','positive','neutral')
+
+reviews.product$date <- as.Date(reviews.product$date, "%Y-%m-%d")
+reviews.product <- reviews.product[reviews.product$product_cat != 'none',]
+```
+
+Drop records before 2012.
+```{r}
+#reviews2.temp <- reviews2.temp[as.numeric(as.character(reviews2.temp$year))>2013,]
+```
+
+Drop records after 2018-10-07 since it's not a full week.
+```{r}
+#reviews2.temp <- reviews2.temp[reviews2.temp$date < '2018-10-07',]
+```
+
+Drop records with no product category.
+```{r}
+#reviews2.temp <- reviews2.temp[reviews2.temp$product_cat != 'none',]
+```
+
+Get selected columns for further analysis.
+```{r}
+#reviews.product <- merge(aws_reviews,reviews2.temp[,c('recid','item_id','incentivized','product_cat','rating','word_count','helpful_yes','date','year','month','week')])
+```
+
+Compute positive sentiment stats without splitting incentivized vs. non-incentivized reviews at all.
+```{r,include=FALSE}
+## mean positive sentiment probability by day
+reviews.product <- reviews.product %>%
+  group_by(product_cat, date) %>%
+  mutate(day_positive = mean(positive))
+
+## mean positive sentiment probability by week
+# reviews.product <- reviews.product %>%
+#   group_by(product_cat, year, week(date)) %>%
+#   mutate(week_positive = mean(positive))
+# 
+# ## mean positive sentiment probability by month
+# reviews.product <- reviews.product %>%
+#   group_by(product_cat, month) %>%
+#   mutate(month_positive = mean(positive))
+```
+
+Compute negative sentiment stats without splitting incentivized vs. non-incentivized reviews at all.
+```{r,include=FALSE}
+## mean negative sentiment probability by day
+reviews.product <- reviews.product %>%
+  group_by(product_cat, date) %>%
+  mutate(day_negative = mean(negative))
+
+## mean negative sentiment probability by week
+# reviews.product <- reviews.product %>%
+#   group_by(product_cat, year, week(date)) %>%
+#   mutate(week_negative = mean(negative))
+# 
+# ## mean negative sentiment probability by month
+# reviews.product <- reviews.product %>%
+#   group_by(product_cat, month) %>%
+#   mutate(month_negative = mean(negative))
+```
+
+Compute mixed sentiment stats without splitting incentivized vs. non-incentivized reviews at all.
+```{r,include=FALSE}
+## mean mixed sentiment probability by day
+reviews.product <- reviews.product %>%
+  group_by(product_cat, date) %>%
+  mutate(day_mixed = mean(mixed))
+
+## mean mixed sentiment probability by week
+# reviews.product <- reviews.product %>%
+#   group_by(product_cat, year, week(date)) %>%
+#   mutate(week_mixed = mean(mixed))
+# 
+# ## mean mixed sentiment probability by month
+# reviews.product <- reviews.product %>%
+#   group_by(product_cat, month) %>%
+#   mutate(month_mixed = mean(mixed))
+```
+
+Compute neutral sentiment stats without splitting incentivized vs. non-incentivized reviews at all.
+```{r,include=FALSE}
+## mean neutral sentiment probability by day
+reviews.product <- reviews.product %>%
+  group_by(product_cat, date) %>%
+  mutate(day_neutral = mean(neutral))
+
+## mean neutral sentiment probability by week
+# reviews.product <- reviews.product %>%
+#   group_by(product_cat, year, week(date)) %>%
+#   mutate(week_neutral = mean(neutral))
+# 
+# ## mean neutral sentiment probability by month
+# reviews.product <- reviews.product %>%
+#   group_by(product_cat, month) %>%
+#   mutate(month_neutral = mean(neutral))
+```
+
+Bin the probability of positive to five bins.
+```{r}
+bins <- c(-1,0.2,0.4,0.6,0.8,Inf)
+reviews.product['positive.binned'] <- cut(reviews.product$positive, 
+                                        breaks=bins, labels=c('<20%','20-40%','40-60%','60-80%','>80%'))
+reviews.product$positive.binned <- as.factor(reviews.product$positive.binned)
+```
+
+Bin the probability of negative to five bins.
+```{r,include=FALSE}
+bins <- c(-1,0.2,0.4,0.6,0.8,Inf)
+reviews.product['negative.binned'] <- cut(reviews.product$negative, 
+                                        breaks=bins, labels=c('<20%','20-40%','40-60%','60-80%','>80%'))
+reviews.product$negative.binned <- as.factor(reviews.product$negative.binned)
+```
+
+Bin the probability of mixed to five bins.
+```{r,include=FALSE}
+bins <- c(-1,0.2,0.4,0.6,0.8,Inf)
+reviews.product['mixed.binned'] <- cut(reviews.product$mixed, 
+                                        breaks=bins, labels=c('<20%','20-40%','40-60%','60-80%','>80%'))
+reviews.product$mixed.binned <- as.factor(reviews.product$mixed.binned)
+```
+
+Bin the probability of neutral to five bins.
+```{r,include=FALSE}
+bins <- c(-1,0.2,0.4,0.6,0.8,Inf)
+reviews.product['neutral.binned'] <- cut(reviews.product$neutral, 
+                                        breaks=bins, labels=c('<20%','20-40%','40-60%','60-80%','>80%'))
+reviews.product$neutral.binned <- as.factor(reviews.product$neutral.binned)
+```
+
+
+# Time Data vs. Positive Sentiment Probability
+
+## Plot mean positive sentiment probability over time by product_cat without splitting incentivized vs. non-incentivized reviews at all
+
+### Positive sentiment probability average by day
+```{r}
+## plot by day
+ggplot(NULL, aes(x = date, y = day_positive))+
+  geom_point(data=reviews.product, aes(color = "daily ave positive"), alpha = 0.7,size=0.2)+
+  geom_smooth(data=reviews.product,method = 'auto',aes(color='daily ave positive line'),size=1,alpha = 0.6)+
+  theme_minimal()+
+  facet_grid(rows=vars(product_cat))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  labs(x='day',y='mean positive',fill='category',title='Product Category Mean positive by Day')
+```
+
+### Positive sentiment probability averaged by week
+```{r,echo=FALSE}
+## plot by week
+# ggplot(NULL, aes(x = week, y = week_positive))+
+#   geom_point(data=reviews.product, aes(color = "weekly ave positive"), alpha = 0.7,size=0.2)+
+#   geom_smooth(data=reviews.product,method = 'auto',aes(color='weekly ave positive line'),size=1,alpha = 0.6)+
+#   theme_minimal()+
+#   facet_grid(rows=vars(product_cat))+
+#   geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+#   labs(x='day',y='mean positive',fill='category',title='Product Category Mean positive by Week')
+```
+
+### Positive sentiment probability averaged by month
+```{r,echo=FALSE}
+## plot by month
+# ggplot(NULL, aes(x = month, y = month_positive))+
+#   geom_point(data=reviews.product, aes(color = "monthly ave positive"), alpha = 0.7,size=0.2)+
+#   geom_smooth(data=reviews.product,method = 'auto',aes(color='monthly ave positive line'),size=1,alpha = 0.6)+
+#   theme_minimal()+
+#   facet_grid(rows=vars(product_cat))+
+#   geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+#   labs(x='day',y='mean positive',fill='category',title='Product Category Mean positive by Month')
+```
+
+
+## Plot positive sentiment probability distribution by proportion
+
+### Positive sentiment probability proportion in a day
+```{r,echo=FALSE}
+ggplot(data=reviews.product, aes(date))+
+  geom_bar(aes(fill=positive.binned), position="fill")+
+  facet_grid(rows=vars(product_cat))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  scale_fill_brewer(palette="RdBu")+
+  ylab('proportion')
+```
+
+### Positive sentiment probability proportion in a week
+```{r,echo=FALSE}
+## percentage of positive sentiment probability vs. week
+# ggplot(data=reviews.product, aes(week))+
+#   geom_bar(aes(fill=positive.binned), position="fill")+
+#   facet_grid(rows=vars(product_cat))+
+#   geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+#   scale_fill_brewer(palette="RdBu")+
+#   ylab('proportion')
+```
+
+### Positive sentiment probability proportion in a month
+```{r,echo=FALSE}
+# ggplot(data=reviews.product, aes(month))+
+#   geom_bar(aes(fill=positive.binned), position="fill")+
+#   facet_grid(rows=vars(product_cat))+
+#   geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+#   scale_fill_brewer(palette="RdBu")+
+#   ylab('proportion')
+```
+
+
+## Plot positive sentiment probability distribution by count
+
+### Positive sentiment probability count in a day
+```{r,echo=FALSE}
+ggplot(reviews.product, aes(date, fill=positive.binned))+
+  geom_bar()+
+  facet_grid(rows=vars(product_cat))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  scale_fill_brewer(palette="RdBu")
+```
+
+### Positive sentiment probability count in a week
+```{r,echo=FALSE}
+# ggplot(reviews.product, aes(week, fill=positive.binned))+
+#   geom_bar()+
+#   facet_grid(rows=vars(product_cat))+
+#   geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+#   scale_fill_brewer(palette="RdBu")
+```
+
+### Positive sentiment probability count in a month
+```{r,echo=FALSE}
+# ggplot(reviews.product, aes(month, fill=positive.binned))+
+#   geom_bar()+
+#   facet_grid(rows=vars(product_cat))+
+#   geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+#   scale_fill_brewer(palette="RdBu")
+```
+
+
+# Time Data vs. Neutral Sentiment Probability
+
+## Plot mean neutral sentiment probability over time by product_cat without splitting incentivized vs. non-incentivized reviews at all
+
+### Neutral sentiment probability average by day
+```{r}
+## plot by day
+ggplot(NULL, aes(x = date, y = day_neutral))+
+  geom_point(data=reviews.product, aes(color = "daily ave neutral"), alpha = 0.7,size=0.2)+
+  geom_smooth(data=reviews.product,method = 'auto',aes(color='daily ave neutral line'),size=1,alpha = 0.6)+
+  theme_minimal()+
+  facet_grid(rows=vars(product_cat))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  labs(x='day',y='mean neutral',fill='category',title='Product Category Mean neutral by Day')
+```
+
+### Neutral sentiment probability averaged by week
+```{r,echo=FALSE}
+## plot by week
+# ggplot(NULL, aes(x = week, y = week_neutral))+
+#   geom_point(data=reviews.product, aes(color = "weekly ave neutral"), alpha = 0.7,size=0.2)+
+#   geom_smooth(data=reviews.product,method = 'auto',aes(color='weekly ave neutral line'),size=1,alpha = 0.6)+
+#   theme_minimal()+
+#   facet_grid(rows=vars(product_cat))+
+#   geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+#   labs(x='day',y='mean neutral',fill='category',title='Product Category Mean neutral by Week')
+```
+
+### Neutral sentiment probability averaged by month
+```{r,echo=FALSE}
+## plot by month
+# ggplot(NULL, aes(x = month, y = month_neutral))+
+#   geom_point(data=reviews.product, aes(color = "monthly ave neutral"), alpha = 0.7,size=0.2)+
+#   geom_smooth(data=reviews.product,method = 'auto',aes(color='monthly ave neutral line'),size=1,alpha = 0.6)+
+#   theme_minimal()+
+#   facet_grid(rows=vars(product_cat))+
+#   geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+#   labs(x='day',y='mean neutral',fill='category',title='Product Category Mean neutral by Month')
+```
+
+
+
+
+

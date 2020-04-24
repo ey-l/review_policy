@@ -1,0 +1,612 @@
+---
+title: 'Review Analysis Tests: Review Count & Review Length'
+author: "Eugenie"
+date: "12/08/2019"
+output: 
+  html_document:
+    toc: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load Source File
+
+Data pre-processing is included, where special chars and minimal stop-words are removed.
+```{r echo=T, results='hide', message=F, warning=F}
+library(data.table)
+## load review data
+source("~/Dropbox/Eugenie/scripts/libs.R")
+```
+
+Load data.
+```{r, include=FALSE}
+reviews3.csv <- read.csv("~/Dropbox/Eugenie/data/processed/processed-reviews3.csv")
+reviews3.csv$date <- as.Date(reviews3.csv$date, "%Y-%m-%d")
+```
+
+
+# Data Processing
+Add category data as extra columns. Join on either item_id or child_id.
+```{r, include=FALSE}
+reviews3.temp <- reviews3.csv
+```
+
+Drop records before 2012.
+```{r, include=FALSE}
+reviews3.temp <- reviews3.temp[as.numeric(as.character(reviews3.temp$year))>2013,]
+```
+
+Drop records after 2018-10-07 since it's not a full week.
+```{r, include=FALSE}
+#reviews3.temp <- reviews3.temp[reviews3.temp$date < '2018-10-07',]
+```
+
+Drop records with no product category.
+```{r, include=FALSE}
+reviews3.temp <- reviews3.temp[reviews3.temp$product_cat != 'none',]
+```
+
+Get selected columns for further analysis.
+```{r, include=FALSE}
+reviews.product <- reviews3.temp[,c('recid','item_id','incentivized','product_cat','rating','word_count','helpful_yes','date','year','month','week')]
+
+## for pulling data
+#reviews.product <- merge(aws_reviews,reviews3.temp[,c('recid','item_id','product_cat','word_count','year','month','week','date')])
+
+reviews.product['after_ban'] <- ifelse(reviews.product$date>'2016-10-02',1,0)
+reviews.product$after_ban <- as.factor(reviews.product$after_ban)
+levels(reviews.product$after_ban) <- c("before", "after")
+```
+
+
+# Analysis Test: Daily Average Review Count
+
+## Data Processing
+First, we estimate the number of days the product has been available for review by counting the number of days from the first review to the last review.
+
+```{r, include=FALSE}
+reviews.product <- reviews.product %>%
+  group_by(item_id) %>%
+  mutate(total_num.days=difftime(max(date), min(date)))
+```
+
+Get the daily number of reviews per item.
+```{r, include=FALSE}
+reviews.daily <- reviews.product %>%
+  group_by(item_id, date) %>%
+  summarise(daily.count = n())
+
+time.diff <- reviews.product[,c('item_id','date')] %>%
+  group_by(item_id) %>%
+  mutate(first_review.date = min(date)) %>%
+  mutate(last_review.date = max(date))
+
+time.diff <- time.diff[,c('item_id','first_review.date','last_review.date')] %>%
+  distinct()
+
+reviews.first_last_date <- time.diff
+
+## creating dates based on the first and last review per item
+time.diff <- setDT(time.diff)[, .(date = seq(first_review.date, last_review.date, by = "day")), 
+                              by = item_id]
+
+reviews.daily <- merge(time.diff, reviews.daily, by=c('item_id','date'), all.x = T)
+reviews.daily[is.na(reviews.daily)] <- 0
+```
+
+Get mean, variance, and standard deviation of the number of reviews per day by item.
+```{r, include=FALSE}
+reviews.daily <- reviews.daily %>%
+  group_by(item_id) %>%
+  mutate(sd = sd(daily.count)) %>%
+  mutate(variance = var(daily.count)) %>%
+  mutate(mean = mean(daily.count))
+```
+
+Get the number of daily reviews that is 2 and 3 sd's away.
+```{r, include=FALSE}
+reviews.daily <- reviews.daily %>%
+  group_by(item_id) %>%
+  mutate(threshold_3sd = mean+3*sd) %>%
+  mutate(threshold_2sd = mean+2*sd)
+
+write.csv(reviews.daily, file = "reviews3-count-test-stats.csv",row.names=FALSE)
+#reviews.daily['threshold.ceil'] <- ceiling(reviews.daily$threshold)
+```
+
+Get the item_id and days where the number of daily reviews is above the threshold.
+```{r, include=FALSE}
+reviews.over_2sd <- reviews.daily[reviews.daily$daily.count>reviews.daily$threshold_2sd,]
+reviews.over_3sd <- reviews.daily[reviews.daily$daily.count>reviews.daily$threshold_3sd,]
+
+reviews.over_2sd <- reviews.over_2sd %>%
+  group_by(item_id) %>%
+  mutate(num.days=n())
+reviews.over_3sd <- reviews.over_3sd %>%
+  group_by(item_id) %>%
+  mutate(num.days=n())
+```
+
+Join results with initial data frame.
+```{r, include=FALSE}
+reviews.over_2sd['review_count.2sd'] <- 1
+reviews.over_3sd['review_count.3sd'] <- 1
+
+reviews.product <- merge(reviews.product, reviews.over_2sd[,c('item_id','date','review_count.2sd')],
+                         by=c('item_id','date'), all.x = T)
+reviews.product <- merge(reviews.product, reviews.over_3sd[,c('item_id','date','review_count.3sd')],
+                         by=c('item_id','date'), all.x = T)
+
+reviews.product[is.na(reviews.product)] <- 0
+
+reviews.product$review_count.2sd <- as.factor(reviews.product$review_count.2sd)
+levels(reviews.product$review_count.2sd) <- c("pass", "fail")
+reviews.product$review_count.3sd <- as.factor(reviews.product$review_count.3sd)
+levels(reviews.product$review_count.3sd) <- c("pass", "fail")
+```
+
+
+## Result Analysis
+
+### Two standard deviations away
+
+```{r,echo=FALSE}
+temp <- data.frame(table(reviews.product[,c('after_ban','review_count.2sd')]))
+knitr::kable(ddply(temp, .(after_ban), mutate, Freq_pct = Freq/sum(Freq)*100))
+```
+
+```{r, echo=FALSE}
+temp <- data.frame(table(reviews.product[,c('incentivized','review_count.2sd')]))
+knitr::kable(ddply(temp, .(incentivized), mutate, Freq_pct = Freq/sum(Freq)*100))
+```
+
+Mean review rating for over vs. under daily threshold for the number of reviews.
+
+```{r,echo=FALSE}
+knitr::kable(aggregate(reviews.product[, 'rating'], list(reviews.product$review_count.2sd), mean))
+```
+
+Review distribution between groups.
+
+```{r,echo=FALSE}
+ggplot(data=reviews.product, aes(review_count.2sd))+
+  geom_bar(aes(fill=as.factor(rating)), position="fill")+
+  scale_fill_brewer(palette="RdBu", name='rating')+
+  ylab('proportion')
+```
+
+Percentage of reviews that is over daily threshold by item.
+
+```{r, echo=FALSE}
+temp <- reviews.product %>%
+  group_by(item_id) %>%
+  mutate(over.count=sum(ifelse(review_count.2sd=='pass',0,1))) %>%
+  mutate(total.count=n())
+
+temp <- temp[,c('item_id','total.count','over.count')]
+temp['over.pct'] <- temp$over.count / temp$total.count * 100
+temp.2 <- reviews.over_2sd[,c('item_id','num.days')] %>% distinct()
+temp <- merge(temp, temp.2, by='item_id') %>% distinct()
+
+temp.2 <- reviews.product[,c('item_id','total_num.days')] %>% distinct()
+temp <- merge(temp, temp.2, by='item_id',all.x = T) %>% distinct()
+
+summary(temp$over.pct)
+```
+
+
+Linear Regression with Fixed Effect on Item ID
+
+```{r, include=FALSE}
+formula.fe <- rating ~ review_count.2sd
+```
+
+```{r, results='asis', echo=FALSE}
+# in model.fe, index = c('item_id') defines 'item_id' as the entity
+model.fe <- plm(data = reviews.product, formula = formula.fe, index = c('item_id'), model = 'within')
+
+# get the model summary
+stargazer(model.fe,title='Linear Regression with Fixed Effect: Daily Review Count', 
+          align=TRUE, type = 'html')
+```
+From the result of the linear fixed effect modelling, the null hypothesis of the independency of products is rejected. 
+
+### Three standard deviations away
+
+```{r,echo=FALSE}
+temp <- data.frame(table(reviews.product[,c('after_ban','review_count.3sd')]))
+knitr::kable(ddply(temp, .(after_ban), mutate, Freq_pct = Freq/sum(Freq)*100))
+```
+
+```{r, echo=FALSE}
+temp <- data.frame(table(reviews.product[,c('incentivized','review_count.3sd')]))
+knitr::kable(ddply(temp, .(incentivized), mutate, Freq_pct = Freq/sum(Freq)*100))
+```
+
+Mean review rating for over vs. under daily threshold for the number of reviews.
+
+```{r,echo=FALSE}
+knitr::kable(aggregate(reviews.product[, 'rating'], list(reviews.product$review_count.3sd), mean))
+```
+
+Review distribution between groups.
+
+```{r,echo=FALSE}
+ggplot(data=reviews.product, aes(review_count.3sd))+
+  geom_bar(aes(fill=as.factor(rating)), position="fill")+
+  scale_fill_brewer(palette="RdBu", name='rating')+
+  ylab('proportion')
+```
+
+Percentage of reviews that is over daily threshold by item.
+
+```{r, echo=FALSE}
+temp <- reviews.product %>%
+  group_by(item_id) %>%
+  mutate(over.count=sum(ifelse(review_count.3sd=='pass',0,1))) %>%
+  mutate(total.count=n())
+
+temp <- temp[,c('item_id','total.count','over.count')]
+temp['over.pct'] <- temp$over.count / temp$total.count * 100
+temp.2 <- reviews.over_3sd[,c('item_id','num.days')] %>% distinct()
+temp <- merge(temp, temp.2, by='item_id') %>% distinct()
+
+temp.2 <- reviews.product[,c('item_id','total_num.days')] %>% distinct()
+temp <- merge(temp, temp.2, by='item_id',all.x = T) %>% distinct()
+
+summary(temp$over.pct)
+```
+
+
+Linear Regression with Fixed Effect on Item ID
+
+```{r, include=FALSE}
+formula.fe <- rating ~ review_count.3sd
+```
+
+```{r, results='asis', echo=FALSE}
+# in model.fe, index = c('item_id') defines 'item_id' as the entity
+model.fe <- plm(data = reviews.product, formula = formula.fe, index = c('item_id'), model = 'within')
+
+# get the model summary
+stargazer(model.fe,title='Linear Regression with Fixed Effect: Daily Review Count', 
+          align=TRUE, type = 'html')
+```
+From the result of the linear fixed effect modelling, the null hypothesis of the independency of products is rejected. 
+
+# Analysis Test: Average Review Length
+Once we have the word count distribution of the product and the expected distribution of the category we compare the two distributions and identify product word count groups that are higher in concentration than we’d expect to see.
+
+## Data Processing
+Bin the review length. 
+
+No need to bin it. 
+```{r,include=FALSE}
+bins <- c(-1,10,15,20,25,30,35,40,45,50,60,70,80,90,100,125,150,200,Inf)
+labels <- c('0-10','11-15','16-20','21-25','26-30','31-35','36-40',
+            '41-45','46-50','51-60','61-70','71-80','81-90','91-100',
+            '101-125','126-150','151-200','201+')
+reviews.product['word_count.binned'] <- cut(reviews.product$word_count, 
+                                        breaks=bins, 
+                                        labels=labels)
+reviews.product$word_count.binned <- as.factor(reviews.product$word_count.binned)
+```
+
+Get the length of reviews per product category.
+```{r, include=FALSE}
+product.length <- reviews.product[,c('item_id','word_count.binned')] %>%
+  group_by_all() %>%
+  count()
+
+## creating dates based on the first and last review per item
+product.length.all <- setDT(product.length)[, .(word_count.binned = labels), by = item_id]
+
+product.length <- merge(product.length.all, product.length, by=c('item_id','word_count.binned'), all.x = T)
+product.length[is.na(product.length)] <- 0
+
+product.length <- product.length %>%
+  group_by(item_id) %>%
+  mutate(product.sum = sum(n))
+
+product.length['product.prop'] <- product.length$n/product.length$product.sum
+
+## get product category
+temp.2 <- reviews.product[,c('item_id','product_cat')] %>% distinct()
+product.length <- merge(product.length, temp.2, 
+                        by='item_id', all.x = T)
+```
+
+By product category, calculate mean, variance, and standard deviation.
+```{r, include=FALSE}
+product.length <- product.length %>%
+  group_by(product_cat, word_count.binned) %>%
+  mutate(sd = sd(product.prop)) %>%
+  mutate(variance = var(product.prop)) %>%
+  mutate(mean = mean(product.prop))
+```
+
+Get the number of daily reviews that is 2 and 3 sd's away.
+```{r, include=FALSE}
+product.length <- product.length %>%
+  group_by(product_cat, word_count.binned) %>%
+  mutate(threshold_2sd = mean+2*sd) %>%
+  mutate(threshold_3sd = mean+3*sd)
+
+#write.csv(product.length, file = "reviews3-length-test-stats.csv",row.names=FALSE)
+#reviews.daily['threshold.ceil'] <- ceiling(reviews.daily$threshold)
+```
+
+```{r, include=FALSE}
+# order the data frame
+product.length <- product.length[order(product.length$item_id, 
+                                       match(product.length$word_count.binned, labels)),]
+```
+
+Get the item_id and days where the number of daily reviews is above the threshold.
+```{r, include=FALSE}
+length.over_2sd <- product.length[product.length$product.prop>product.length$threshold_2sd,]
+length.over_3sd <- product.length[product.length$product.prop>product.length$threshold_3sd,]
+
+length.over_2sd <- length.over_2sd %>%
+  group_by(item_id) %>%
+  mutate(num.reviews=sum(n))
+length.over_3sd <- length.over_3sd %>%
+  group_by(item_id) %>%
+  mutate(num.reviews=sum(n))
+
+#length.over['over.pct'] <- length.over$num.reviews/length.over$product.sum
+```
+
+Join results with initial data frame.
+```{r, include=FALSE}
+length.over_2sd['word_count.2sd'] <- 1
+length.over_3sd['word_count.3sd'] <- 1
+
+reviews.product <- merge(reviews.product,
+                         length.over_2sd[,c('item_id','word_count.binned','word_count.2sd')],
+                         by=c('item_id','word_count.binned'), all.x = T)
+reviews.product <- merge(reviews.product,
+                         length.over_3sd[,c('item_id','word_count.binned','word_count.3sd')],
+                         by=c('item_id','word_count.binned'), all.x = T)
+
+reviews.product[is.na(reviews.product)] <- 0
+
+reviews.product$word_count.2sd <- as.factor(reviews.product$word_count.2sd)
+levels(reviews.product$word_count.2sd) <- c("pass", "fail")
+reviews.product$word_count.3sd <- as.factor(reviews.product$word_count.3sd)
+levels(reviews.product$word_count.3sd) <- c("pass", "fail")
+
+temp <- reviews.product[,c('recid','review_count.2sd','review_count.3sd','word_count.2sd','word_count.3sd')]
+write.csv(temp, file = "reviews3-test-results.csv",row.names=FALSE)
+```
+
+
+
+## Result Analysis
+
+### Two standard deviations away
+
+```{r,echo=FALSE}
+temp <- data.frame(table(reviews.product[,c('after_ban','word_count.2sd')]))
+knitr::kable(ddply(temp, .(after_ban), mutate, Freq_pct = Freq/sum(Freq)*100))
+```
+
+```{r, echo=FALSE}
+temp <- data.frame(table(reviews.product[,c('incentivized','word_count.2sd')]))
+knitr::kable(ddply(temp, .(incentivized), mutate, Freq_pct = Freq/sum(Freq)*100))
+```
+
+Mean review rating for over vs. under length threshold for the number of reviews.
+
+```{r,echo=FALSE}
+knitr::kable(aggregate(reviews.product[, 'rating'], list(reviews.product$word_count.2sd), mean))
+```
+
+Review distribution between groups.
+
+```{r,echo=FALSE}
+ggplot(data=reviews.product, aes(word_count.2sd))+
+  geom_bar(aes(fill=as.factor(rating)), position="fill")+
+  scale_fill_brewer(palette="RdBu", name='rating')+
+  ylab('proportion')
+```
+
+Percentage of reviews that is over length threshold by item.
+
+```{r, echo=FALSE}
+# Percentage of reviews that is over length threshold by item.
+temp <- reviews.product %>%
+  group_by(item_id) %>%
+  mutate(over.count=sum(ifelse(word_count.2sd=='pass',0,1))) %>%
+  mutate(total.count=n())
+
+temp <- temp[,c('item_id','total.count','over.count')]
+temp['over.pct'] <- temp$over.count / temp$total.count * 100
+temp.2 <- reviews.over_2sd[,c('item_id','num.days')] %>% distinct()
+temp <- merge(temp, temp.2, by='item_id') %>% distinct()
+
+temp.2 <- reviews.product[,c('item_id','total_num.days')] %>% distinct()
+temp <- merge(temp, temp.2, by='item_id',all.x = T) %>% distinct()
+
+summary(temp$over.pct)
+```
+
+#### Linear Regression with Fixed Effect on Item ID
+
+```{r, include=FALSE}
+formula.fe <- rating ~ word_count.2sd
+```
+
+```{r, results='asis', echo=FALSE}
+# in model.fe, index = c('item_id') defines 'item_id' as the entity
+model.fe <- plm(data = reviews.product, formula = formula.fe, index = c('item_id'), model = 'within')
+
+# get the model summary
+stargazer(model.fe,title='Linear Regression with Fixed Effect: Review Word Count', 
+          align=TRUE, type = 'html')
+```
+From the result of the linear fixed effect modelling, the null hypothesis of the independency of products is rejected. 
+
+
+#### Graphs
+
+```{r, echo=FALSE}
+product.length.over <- product.length[product.length$item_id %in% length.over_2sd$item_id,]
+
+category.length <- product.length[,c('product_cat','word_count.binned','mean','threshold_2sd')] %>% distinct()
+
+ggplot(category.length, aes(x=as.factor(match(word_count.binned, labels)), group = 1))+
+  geom_line(aes(y=threshold_2sd, color='threshold'))+
+  geom_line(aes(y=mean, color='mean'))+
+  facet_grid(rows=vars(product_cat))+
+  scale_x_discrete(labels= labels)+
+  theme(axis.text.x = element_text(face="bold", angle=45))+
+  xlab('word count bins')+
+  ylab('proportion')
+```
+
+### Three standard deviations away
+
+```{r,echo=FALSE}
+temp <- data.frame(table(reviews.product[,c('after_ban','word_count.3sd')]))
+knitr::kable(ddply(temp, .(after_ban), mutate, Freq_pct = Freq/sum(Freq)*100))
+```
+
+```{r, echo=FALSE}
+temp <- data.frame(table(reviews.product[,c('incentivized','word_count.3sd')]))
+knitr::kable(ddply(temp, .(incentivized), mutate, Freq_pct = Freq/sum(Freq)*100))
+```
+
+Mean review rating for over vs. under length threshold for the number of reviews.
+
+```{r,echo=FALSE}
+knitr::kable(aggregate(reviews.product[, 'rating'], list(reviews.product$word_count.3sd), mean))
+```
+
+Review distribution between groups.
+
+```{r,echo=FALSE}
+ggplot(data=reviews.product, aes(word_count.3sd))+
+  geom_bar(aes(fill=as.factor(rating)), position="fill")+
+  scale_fill_brewer(palette="RdBu", name='rating')+
+  ylab('proportion')
+```
+
+Percentage of reviews that is over length threshold by item.
+
+```{r, echo=FALSE}
+# Percentage of reviews that is over length threshold by item.
+temp <- reviews.product %>%
+  group_by(item_id) %>%
+  mutate(over.count=sum(ifelse(word_count.3sd=='pass',0,1))) %>%
+  mutate(total.count=n())
+
+temp <- temp[,c('item_id','total.count','over.count')]
+temp['over.pct'] <- temp$over.count / temp$total.count * 100
+temp.2 <- reviews.over_3sd[,c('item_id','num.days')] %>% distinct()
+temp <- merge(temp, temp.2, by='item_id') %>% distinct()
+
+temp.2 <- reviews.product[,c('item_id','total_num.days')] %>% distinct()
+temp <- merge(temp, temp.2, by='item_id',all.x = T) %>% distinct()
+
+summary(temp$over.pct)
+```
+
+#### Linear Regression with Fixed Effect on Item ID
+
+```{r, include=FALSE}
+formula.fe <- rating ~ word_count.3sd
+```
+
+```{r, results='asis', echo=FALSE}
+# in model.fe, index = c('item_id') defines 'item_id' as the entity
+model.fe <- plm(data = reviews.product, formula = formula.fe, index = c('item_id'), model = 'within')
+
+# get the model summary
+stargazer(model.fe,title='Linear Regression with Fixed Effect: Review Word Count', 
+          align=TRUE, type = 'html')
+```
+From the result of the linear fixed effect modelling, the null hypothesis of the independency of products is rejected. 
+
+
+#### Graphs
+
+```{r, echo=FALSE}
+product.length.over <- product.length[product.length$item_id %in% length.over_3sd$item_id,]
+
+category.length <- product.length[,c('product_cat','word_count.binned','mean','threshold_3sd')] %>% distinct()
+
+ggplot(category.length, aes(x=as.factor(match(word_count.binned, labels)), group = 1))+
+  geom_line(aes(y=threshold_3sd, color='threshold'))+
+  geom_line(aes(y=mean, color='mean'))+
+  facet_grid(rows=vars(product_cat))+
+  scale_x_discrete(labels= labels)+
+  theme(axis.text.x = element_text(face="bold", angle=45))+
+  xlab('word count bins')+
+  ylab('proportion')
+```
+
+
+# Analysis on Reviews Fail Both Tests
+
+## The number/percentage of reviews fail both/single test(s)
+
+### Two SD
+```{r, echo=FALSE}
+temp <- data.frame(table(reviews.product[,c('review_count.2sd','word_count.2sd')]))
+knitr::kable(ddply(temp, .(), mutate, Freq_pct = Freq/sum(Freq)*100))
+```
+
+### Three SD
+```{r, echo=FALSE}
+temp <- data.frame(table(reviews.product[,c('review_count.3sd','word_count.3sd')]))
+knitr::kable(ddply(temp, .(), mutate, Freq_pct = Freq/sum(Freq)*100))
+```
+
+## After the ban date
+
+### Two SD
+```{r, echo=FALSE}
+temp <- data.frame(table(reviews.product[,c('after_ban','review_count.2sd','word_count.2sd')]))
+knitr::kable(ddply(temp, .(after_ban), mutate, Freq_pct = Freq/sum(Freq)*100))
+```
+
+### Three SD
+```{r, echo=FALSE}
+temp <- data.frame(table(reviews.product[,c('after_ban','review_count.3sd','word_count.3sd')]))
+knitr::kable(ddply(temp, .(after_ban), mutate, Freq_pct = Freq/sum(Freq)*100))
+```
+
+## How many are incentivized?
+
+### Two SD
+```{r, echo=FALSE}
+temp <- data.frame(table(reviews.product[,c('incentivized','review_count.2sd','word_count.2sd')]))
+knitr::kable(ddply(temp, .(incentivized), mutate, Freq_pct = Freq/sum(Freq)*100))
+```
+
+### Three SD
+
+```{r, echo=FALSE}
+temp <- data.frame(table(reviews.product[,c('incentivized','review_count.3sd','word_count.3sd')]))
+knitr::kable(ddply(temp, .(incentivized), mutate, Freq_pct = Freq/sum(Freq)*100))
+```
+
+
+# Other Info
+
+Percentage/count of reviews for products didn't come out until 2016-10-03 (after ban date).
+```{r, echo=FALSE}
+temp.3 <- reviews.product
+temp.3['exist_after'] <- ifelse(temp.3$item_id %in% temp.2$item_id,1,0)
+temp.3$exist_after <- as.factor(temp.3$exist_after)
+levels(temp.3$exist_after) <- c('before','after')
+
+temp <- data.frame(table(temp.3[,c('exist_after')]))
+knitr::kable(ddply(temp, .(), mutate, Freq_pct = Freq/sum(Freq)*100))
+```
+
+
