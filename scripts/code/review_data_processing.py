@@ -6,7 +6,7 @@ import time
 #warnings.filterwarnings('ignore')
 
 # Our script
-import get_incent_reviews
+import find_similar_products
 
 DIR_PATH = '../data/Processed_Julian_Amazon_data'
 
@@ -18,10 +18,10 @@ def tag_incentivized(paths):
     similar_df = DIR_PATH+'/sim_reviews/'+dataset+'_10_similar_reviews.csv'
     tagged_path = DIR_PATH+'/tagged/'+dataset+'_merged_reviews_tagged.csv'
 	
-    #get_incent_reviews.get_doc2vec(dataset, df_path)
-    get_incent_reviews.get_similar_products(dataset, df_path, vectors, 10)
-    #get_incent_reviews.tag_incentive(dataset, similar_df)
-    #get_incent_reviews.tag_incentive_ngrams(dataset, tagged_path)
+    #find_similar_products.get_doc2vec(dataset, df_path)
+    find_similar_products.get_similar_products(dataset, df_path, vectors, 10)
+    #find_similar_products.tag_incentive(dataset, similar_df)
+    #find_similar_products.tag_incentive_ngrams(dataset, tagged_path)
 	
 
 # main script

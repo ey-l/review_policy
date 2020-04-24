@@ -5,41 +5,19 @@ import pandas as pd
 import gzip
 import math
 from datetime import datetime
-# To count frequency in lists
 import collections
+
+from utils import getDF, is_amazon
 
 '''
 Usage instructions:
     
     This script 
-        1) 
-        2) 
+        1) Merges meta_product_data with review_data files for each category
+        2) Records the count info
     
-    Primary use case: set the SITES, YEARS, and DATA_NAME. The LAI data of the given sites will be stored by year in
-    the given directory. 
-    The CSV file includes ['Latitude','Longitude','Date','LAI','Tile']. Tile is saved to allow easy trace back since 
-    LAI data is initially on Sinusoidal Coordinate System
+    Primary use case: Given a list of file paths
 '''
-
-def parse(path):
-  g = gzip.open(path, 'rb')
-  for l in g:
-    yield json.loads(l.decode('utf-8'))
-
-def getDF(path):
-  i = 0
-  df = {}
-  for d in parse(path):
-    df[i] = d
-    i += 1
-  return pd.DataFrame.from_dict(df, orient='index')
-
-def is_amazon (x):
-    # Look for an exact match
-    amazon_brands = ['Amazon', 'Rivet', 'Stone & Beam', 'AmazonBasics', 'Ravenna Home', 'Pinzon by Amazon', 'Goodthreads', '206 Collective', 'Core 10', 'Presto!', 'Mae', 'Spotted Zebra', 'Amazon Essentials', 'Amazon Elements', 'Mama Bear', 'Basic Care', 'Happy Belly', 'Revly', 'Solimo', 'OWN PWR', 'Mountain Falls', 'P2N Peak Performance Nutrition', 'Nature\'s Wonder', 'Amazing Baby', 'Nod by Tuft & Needle']
-    if x in amazon_brands:
-        return 1
-    return 0
 
 def common_member(a, cats): 
     a_set = set(a) 
@@ -159,5 +137,6 @@ if __name__ == "__main__":
     #q.append(('../data/Julian_Amazon_data/meta_Industrial_and_Scientific.json.gz','../data/Julian_Amazon_data/Industrial_and_Scientific.json.gz'))
 
     for i in q:
-    	get_counts(log, i)
+    	#get_counts(log, i)
+        merge_datasets(i[0], i[1])
 
