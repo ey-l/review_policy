@@ -115,6 +115,7 @@ def get_products_data(file_path, save_to):
 
 def add_week_numbers(file_path, save_to):
     df = pd.read_csv(file_path, low_memory=False)
+    df.rename(columns={'item_id':'asin'}, inplace=True)
     weeks = list(set(df['week'].values))
     weeks.sort()
     nums = list(range(len(weeks)))
@@ -137,12 +138,12 @@ q.append(('../data/merged_Patio,_Lawn_&_Garden.csv', 'Patio_Lawn_and_Garden'))
 #q.append(('../data/merged_Clothing,_Shoes_&_Jewelry.csv', 'Clothing_Shoes_and_Jewelry'))
 #q.append(('../data/merged_Automotive.csv' ,'Automotive'))
 
-reviews_dataset = '../data/Processed_Julian_Amazon_data/did/reviews_mcauley_description.csv' #'../data/merged_McAuley.csv' #'mcauley_top10_numeric.csv'
-products_dataset = '../data/Processed_Julian_Amazon_data/did/products_mcauley_description.csv' #'../data/merged_McAuley_weekly.csv'
+reviews_dataset = '../data/Processed_Julian_Amazon_data/did/reviews_mcauley_description_full_week_num.csv' #'../data/merged_McAuley.csv' #'mcauley_top10_numeric.csv'
+products_dataset = '../data/Processed_Julian_Amazon_data/did/products_mcauley_description_full_week_num.csv' #'../data/merged_McAuley_weekly.csv'
 #get_selected_data(q, reviews_dataset) 
 #get_selected_columns(file_path, save_to)
 #get_weekly_stats(reviews_dataset, reviews_dataset)
-get_products_data(reviews_dataset, products_dataset)
-add_week_numbers(reviews_dataset, '../data/Processed_Julian_Amazon_data/did/reviews_mcauley_description_week_num.csv')
-add_week_numbers(products_dataset, products_dataset)
+#get_products_data(reviews_dataset, products_dataset)
+add_week_numbers('reviews_mcauley_description_full.csv', reviews_dataset)
+add_week_numbers('products_mcauley_description_full.csv', products_dataset)
 
