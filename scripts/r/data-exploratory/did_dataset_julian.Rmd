@@ -38,14 +38,14 @@ source("~/Dropbox/Eugenie/scripts/libs.R")
 - Load review data and brand data
 ```{r, include=FALSE}
 # Load review data
-did.reviews <- read.csv("~/Dropbox/Eugenie/data/processed_julian_amazon_data/did_reviews_mcauley.csv")
+reviews <- read.csv("~/Dropbox/Eugenie/data/processed_julian_amazon_data/did/reviews_mcauley_description_full.csv")
 ```
 
 - Get reviews 6 months before and after the ban
 ```{r, eval = FALSE, include=FALSE}
 # Get reviews 6 months before and after the ban
-reviews <- reviews[reviews$date>'2016-04-02',]
-reviews <- reviews[reviews$date<'2017-04-02',]
+reviews <- reviews[reviews$reviewTime>='2016-04-02',]
+reviews <- reviews[reviews$reviewTime<='2017-04-02',]
 ```
 
 ```{r, eval = FALSE, include=FALSE}
@@ -60,7 +60,7 @@ reviews$after_ban <- ifelse(reviews$date>'2016-10-02',1,0)
 - Drop records with no product category
 ```{r, eval = FALSE, include=FALSE}
 # Get selected columns for further analysis.
-reviews.product <- reviews[,c('overall', 'vote', 'verified', 'reviewerID', 'asin', 'word_count', 'image', 'category', 'brand', 'price', 'main_cat', 'amazon', 'review_count', 'sim1', 'date', 'week', 'after_ban')]
+reviews.product <- reviews[,c('overall', 'vote', 'verified', 'reviewerID', 'asin', 'word_count', 'image', 'category', 'brand', 'price', 'main_cat', 'amazon', 'sim1', 'date', 'week', 'after_ban')]
 reviews.product$rating <- reviews.product$overall
 reviews.product$item_id <- reviews.product$asin
 reviews.product$helpful_yes <- reviews.product$vote
@@ -68,21 +68,21 @@ reviews.product$image_count <- reviews.product$image
 ```
 
 ```{r, eval = FALSE, include=FALSE}
-did.reviews <- reviews.product[,c('rating', 'helpful_yes', 'verified', 'reviewerID', 'item_id', 'word_count', 'image_count', 'category', 'brand', 'price', 'main_cat', 'amazon', 'review_count', 'sim1', 'date', 'week', 'after_ban')]
+did.reviews <- reviews.product[,c('rating', 'helpful_yes', 'verified', 'reviewerID', 'item_id', 'word_count', 'image_count', 'category', 'brand', 'price', 'main_cat', 'amazon', 'sim1', 'date', 'week', 'after_ban')]
 ```
 
 ```{r, eval = FALSE, include=FALSE}
 # List of dependent variables
 # Compute weekly stats for each product
 # Mean measurement by week
-did.reviews <- did.reviews %>%
-  group_by(item_id, week) %>%
-  mutate(week_n = n()) %>%
-  mutate(week_rating = mean(rating)) %>%
-  #mutate(week_positive = mean(positive)) %>%
-  mutate(week_word_count = mean(word_count)) %>%
-  mutate(week_helpful_yes = mean(helpful_yes)) %>%
-  mutate(week_image_count = mean(image_count))
+did.reviews <- reviews %>%
+  group_by(asin, week) %>%
+  mutate(weekly_review_count = n()) %>%
+  mutate(avg_rating = mean(overall)) %>%
+  mutate(avg_sentiment = mean(sentiment)) %>%
+  mutate(avg_word_count = mean(word_count)) %>%
+  mutate(avg_vote = mean(vote)) %>%
+  mutate(avg_image = mean(image))
 ```
 
 ```{r eval = FALSE, include=FALSE}
@@ -92,6 +92,11 @@ did.reviews <- did.reviews %>%
   mutate(week_n_verified = sum(verified_purchaser)) %>%
   mutate(week_incentivized = week_n_incentivized / week_n) %>%
   mutate(week_verified = week_n_verified / week_n)
+```
+
+```{r, include=FALSE}
+# Write to save
+write.csv(did.reviews, file="~/Dropbox/Eugenie/data/processed_julian_amazon_data/did/reviews_mcauley_description_full.csv", row.names=FALSE)
 ```
 
 ```{r, results='asis', echo=FALSE}
@@ -134,7 +139,7 @@ stargazer(fe.rating, fe.positive, fe.word_count, fe.helpful_yes, fe.image, title
 
 # Get products
 ```{r, include=FALSE}
-did.products <- did.reviews[,c('item_id','category','week_n','week_rating','week_word_count','week_helpful_yes','week_image_count','week','after_ban','brand', 'amazon','price')]
+did.products <- did.reviews[,c('item_id','category','weekly_review_count','avg_rating','avg_word_count','avg_vote','avg_image','week','after_ban','brand', 'amazon','price','sim1','main_cat')]
 did.products <- did.products %>% distinct()
 ```
 
@@ -145,7 +150,7 @@ did.products['non_amazon'] <- ifelse(did.products$amazon == 1, 0, 1)
 
 ```{r, include=FALSE}
 # Write to save
-write.csv(did.products, file="did_products_mcauley.csv", row.names=FALSE)
+write.csv(did.products, file="~/Dropbox/Eugenie/data/processed_julian_amazon_data/did/products_mcauley_description_full.csv", row.names=FALSE)
 ```
 
 ```{r, include=FALSE}

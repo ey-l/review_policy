@@ -319,3 +319,16 @@ def tag_incentive_ngrams(dataset, df_path):
     log = '../data/Processed_Julian_Amazon_data/tagged/'+dataset+'_ngrams.csv'
     df_incent.to_csv(log)
     print(dataset + " is logged!")
+
+def tag_incentivized(paths):
+    df_path = paths[0]
+    dataset = paths[1]
+
+    vectors = DIR_PATH+'/doc2vec/'+dataset+'_description.csv'
+    similar_df = DIR_PATH+'/sim_reviews/'+dataset+'_10_similar_reviews.csv'
+    tagged_path = DIR_PATH+'/tagged/'+dataset+'_merged_reviews_tagged.csv'
+    
+    #find_similar_products.get_doc2vec(dataset, df_path)
+    find_similar_products.get_similar_products(dataset, df_path, vectors, 10)
+    #find_similar_products.tag_incentive(dataset, similar_df)
+    #find_similar_products.tag_incentive_ngrams(dataset, tagged_path)

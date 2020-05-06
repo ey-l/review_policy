@@ -8,6 +8,11 @@ import gzip
 import math
 from datetime import datetime, timedelta
 
+import nltk
+nltk.download('vader_lexicon')
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
+SID = SentimentIntensityAnalyzer()
+
 # Ignore warnings
 #import warnings
 #warnings.filterwarnings('ignore')
@@ -18,7 +23,13 @@ COLS = ['X','overall','vote', 'verified', 'reviewTime', 'reviewerID', 'asin', 'r
        'tech2', 'amazon', 'sim1']
 
 NON_TEXT = ['X','overall', 'vote', 'verified', 'reviewTime', 'reviewerID', 'asin', 'word_count',
-            'image', 'category', 'brand', 'price', 'main_cat', 'amazon', 'sim1'] #, 'sim1'
+            'sentiment','image', 'category', 'brand', 'price', 'main_cat', 'amazon', 'sim1'] #, 'sim1'
+
+def nltk_polarity(text):
+    if isinstance(text, str):
+        print('hey')
+        return SID.polarity_scores(text)['compound']
+    return np.NaN
 
 def get_image_count(x): 
     if (type(x) is str):
@@ -46,15 +57,16 @@ def get_selected_data(paths, save_to, verbose=True):
     for i in paths:
         ORIGINAL_DATASET = i[0]
         DATASET_NAME = i[1]
-        #TOP10_SIMILAR = '../data/Processed_Julian_Amazon_data/sim_reviews/'+DATASET_NAME+'_10_similar_reviews.csv'
+        TOP10_SIMILAR = '../data/Processed_Julian_Amazon_data/sim_reviews/'+DATASET_NAME+'_10_similar_reviews.csv'
 	
         # Get selected data columns
-        df = pd.read_csv(ORIGINAL_DATASET, index_col=0, low_memory=False)
+        df = pd.read_csv(TOP10_SIMILAR, index_col=0, low_memory=False)
         df = df.loc[:,COLS]
         df['overall'] = df['overall'].apply(get_int)
         df['vote'] = df['vote'].apply(get_int)
         df['reviewTime'] = df['reviewTime'].apply(lambda x: str(datetime.strptime(x, '%m %d, %Y').date()))
         df['word_count'] = df['reviewText'].apply(lambda x: len(str(x)))
+        df['sentiment'] = df['reviewText'].apply(nltk_polarity)
         df['image'] = df['image'].apply(get_image_count)
         df['category'] = df['category'].apply(lambda x: x.strip('][').strip('\''))
         df['price'] = df['price'].apply(handle_price)
@@ -89,12 +101,13 @@ def get_weekly_stats(file_path, save_to):
     df = pd.read_csv(file_path, index_col=0)
     df['week'] = df['reviewTime'].apply(lambda x: datetime.strptime(x, '%Y-%m-%d') - timedelta(days=datetime.strptime(x, '%Y-%m-%d').weekday()))
     groups = df.groupby(['asin','week'], as_index=False)
-    cols = ['asin','week','avg_rating','weekly_review_count','avg_word_count','avg_vote','avg_image']
+    cols = ['asin','week','avg_rating','weekly_review_count','avg_word_count','avg_sentiment','avg_vote','avg_image']
     df_weekly = pd.DataFrame(columns=cols)
     for group in groups:
         df_group = group[1]
         df_group['avg_rating'] = df_group['overall'].mean()
         df_group['avg_word_count'] = df_group['word_count'].mean()
+        df_group['avg_sentiment'] = df_group['sentiment'].mean()
         df_group['avg_vote'] = df_group['vote'].mean()
         df_group['avg_image'] = df_group['image'].mean()
         df_group['weekly_review_count'] = df_group.shape[0]
@@ -107,7 +120,7 @@ def get_weekly_stats(file_path, save_to):
 
 def get_products_data(file_path, save_to):
     df = pd.read_csv(file_path, low_memory=False)
-    df_cols = ['asin','week','category','brand','price','main_cat','sim1','amazon','avg_rating','weekly_review_count','avg_word_count','avg_vote','avg_image']
+    df_cols = ['asin','week','category','brand','price','main_cat','sim1','amazon','avg_rating','weekly_review_count','avg_word_count','avg_sentiment','avg_vote','avg_image']
     df_products = df[df_cols]
     df_products.drop_duplicates(keep='first',inplace=True)
     df_products.to_csv(save_to)
@@ -124,26 +137,13 @@ def add_week_numbers(file_path, save_to):
     df.to_csv(save_to)
     print("Successfully saved the file with week numbers")
 
-# main script
-q = []
+def process_datasets(p, reviews_dataset, products_dataset):
+    #reviews_dataset = '../data/Processed_Julian_Amazon_data/did/reviews_mcauley_description_full.csv' #'../data/merged_McAuley.csv' #'mcauley_top10_numeric.csv'
+    #products_dataset = '../data/Processed_Julian_Amazon_data/did/products_mcauley_description_full.csv' #'../data/merged_McAuley_weekly.csv'
+    #get_selected_data(q, 'reviews_mcauley_description.csv')
+    #get_weekly_stats('reviews_mcauley_description.csv', reviews_dataset)
+    get_products_data(reviews_dataset, products_dataset)
+    add_week_numbers(reviews_dataset, reviews_dataset)
+    add_week_numbers(products_dataset, products_dataset)
 
-#q.append(('../data/merged_Cell_Phones_&_Accessories.csv', 'Cell_Phones_and_Accessories'))
-#q.append(('../data/merged_Tools_&_Home_Improvement.csv', 'Tools_and_Home_Improvement'))
-#q.append(('../data/merged_Home_&_Kitchen.csv', 'Home_and_Kitchen'))
-#q.append(('../data/merged_Electronics.csv', 'Electronics'))
-q.append(('../data/merged_Office_Products.csv', 'Office_Products'))
-#q.append(('../data/merged_Sports_&_Outdoors.csv', 'Sports_and_Outdoors'))
-q.append(('../data/merged_Patio,_Lawn_&_Garden.csv', 'Patio_Lawn_and_Garden'))
-#q.append(('../data/merged_Pet_Supplies.csv', 'Pet_Supplies'))
-#q.append(('../data/merged_Clothing,_Shoes_&_Jewelry.csv', 'Clothing_Shoes_and_Jewelry'))
-#q.append(('../data/merged_Automotive.csv' ,'Automotive'))
-
-reviews_dataset = '../data/Processed_Julian_Amazon_data/did/reviews_mcauley_description_full_week_num.csv' #'../data/merged_McAuley.csv' #'mcauley_top10_numeric.csv'
-products_dataset = '../data/Processed_Julian_Amazon_data/did/products_mcauley_description_full_week_num.csv' #'../data/merged_McAuley_weekly.csv'
-#get_selected_data(q, reviews_dataset) 
-#get_selected_columns(file_path, save_to)
-#get_weekly_stats(reviews_dataset, reviews_dataset)
-#get_products_data(reviews_dataset, products_dataset)
-add_week_numbers('reviews_mcauley_description_full.csv', reviews_dataset)
-add_week_numbers('products_mcauley_description_full.csv', products_dataset)
 
