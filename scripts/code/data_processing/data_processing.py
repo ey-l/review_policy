@@ -134,11 +134,18 @@ def add_week_numbers(file_path, save_to):
     df.to_csv(save_to)
     print("Successfully saved the file with week numbers")
 
-def process_datasets(p, reviews_dataset, products_dataset):
-    #reviews_dataset = '../data/Processed_Julian_Amazon_data/did/reviews_mcauley_description_full.csv' #'../data/merged_McAuley.csv' #'mcauley_top10_numeric.csv'
-    #products_dataset = '../data/Processed_Julian_Amazon_data/did/products_mcauley_description_full.csv' #'../data/merged_McAuley_weekly.csv'
-    #get_selected_data(q, 'reviews_mcauley_description.csv')
-    #get_weekly_stats('reviews_mcauley_description.csv', reviews_dataset)
+if __name__ == "__main__":
+    """
+    Use case
+    """
+    #q = []
+    #q.append(('../data/merged_Cell_Phones_&_Accessories.csv', 'Cell_Phones_and_Accessories'))
+    #q.append(('../data/merged_Tools_&_Home_Improvement.csv', 'Tools_and_Home_Improvement'))
+
+    reviews_dataset = '../data/Processed_Julian_Amazon_data/did/reviews_mcauley_description_full.csv' #'../data/merged_McAuley.csv' #'mcauley_top10_numeric.csv'
+    products_dataset = '../data/Processed_Julian_Amazon_data/did/products_mcauley_description_full.csv' #'../data/merged_McAuley_weekly.csv'
+    get_selected_data(q, 'reviews_mcauley_description.csv')
+    get_weekly_stats('reviews_mcauley_description.csv', reviews_dataset)
     get_products_data(reviews_dataset, products_dataset)
     add_week_numbers(reviews_dataset, reviews_dataset)
     add_week_numbers(products_dataset, products_dataset)
