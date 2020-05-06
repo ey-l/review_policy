@@ -1,3 +1,6 @@
+import sys
+sys.path.append('..')
+
 # Import libraries
 import csv
 import time
@@ -17,13 +20,7 @@ SID = SentimentIntensityAnalyzer()
 #import warnings
 #warnings.filterwarnings('ignore')
 
-COLS = ['X','overall','vote', 'verified', 'reviewTime', 'reviewerID', 'asin', 'reviewerName',
-       'reviewText', 'summary', 'unixReviewTime', 'image', 'category',
-       'description', 'title', 'brand', 'rank', 'price', 'fit', 'main_cat',
-       'tech2', 'amazon', 'sim1']
-
-NON_TEXT = ['X','overall', 'vote', 'verified', 'reviewTime', 'reviewerID', 'asin', 'word_count',
-            'sentiment','image', 'category', 'brand', 'price', 'main_cat', 'amazon', 'sim1'] #, 'sim1'
+from utils import COLS_SIM, NON_TEXT_SIM
 
 def nltk_polarity(text):
     if isinstance(text, str):
@@ -61,7 +58,7 @@ def get_selected_data(paths, save_to, verbose=True):
 	
         # Get selected data columns
         df = pd.read_csv(TOP10_SIMILAR, index_col=0, low_memory=False)
-        df = df.loc[:,COLS]
+        df = df.loc[:,COLS_SIM]
         df['overall'] = df['overall'].apply(get_int)
         df['vote'] = df['vote'].apply(get_int)
         df['reviewTime'] = df['reviewTime'].apply(lambda x: str(datetime.strptime(x, '%m %d, %Y').date()))
@@ -86,13 +83,13 @@ def get_selected_data(paths, save_to, verbose=True):
     print(df_merged.loc[0:4,'overall'])
     print(df_merged.columns)
     # Get the numeric attributes only
-    df_merged = df_merged.loc[:, NON_TEXT]
+    df_merged = df_merged.loc[:, NON_TEXT_SIM]
     df_merged.to_csv(save_to, index=False)
     print("Successfully saved the merged file")
 
 def get_selected_columns(file_path, save_to):
     df = pd.read_csv(file_path, low_memory=False)
-    df = df.loc[:, NON_TEXT]
+    df = df.loc[:, NON_TEXT_SIM]
     print(df.shape[0])
     df.to_csv(save_to)
     print("Successfully saved the file with selected columns")

@@ -1,3 +1,6 @@
+import sys
+#sys.path.append('/stat_analysis')
+
 import csv
 import time
 
@@ -5,8 +8,10 @@ import time
 #import warnings
 #warnings.filterwarnings('ignore')
 
-# Our script
-from product_matching import tag_incentivized 
+# Script
+#from product_matching import tag_incentivized 
+from reviewer_analysis import get_reviews_from_list, get_reviewers
+
 
 DIR_PATH = '../data/Processed_Julian_Amazon_data'
 
@@ -31,5 +36,7 @@ if __name__ == "__main__":
     #q.append(('../data/merged_Appliances.csv', 'Appliances', '../data/Processed_Julian_Amazon_data/doc2vec/Appliances_doc2vec.csv', '../data/Processed_Julian_Amazon_data/sim_reviews/Appliances_similar_reviews.csv'))
     #q.append(('../data/merged_Industrial_and_Scientific.csv'))
 
-    for i in q:
-        tag_incentivized(i)
+    fp = DIR_PATH+'/did/reviews_mcauley_description_office_patio.csv'
+    save_to = DIR_PATH+'/stat_analysis/office_reviews.csv'
+    reviewerIDs = get_reviewers(fp)
+    get_reviews_from_list(q, reviewerIDs, save_to)

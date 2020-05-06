@@ -321,6 +321,14 @@ def tag_incentive_ngrams(dataset, df_path):
     print(dataset + " is logged!")
 
 def tag_incentivized(paths):
+    '''
+    Use case:
+    q = []
+    q.append(...)
+    
+    for i in q:
+        tag_incentivized(i)
+    '''
     df_path = paths[0]
     dataset = paths[1]
 
