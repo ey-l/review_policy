@@ -127,7 +127,7 @@ def get_reviewer_stats(fp, save_to, verbose=True):
 		print("Successfully computed average image count for each reviewer")
 
 	dfs = [df_counts, df_days, df_brands, df_ratings, df_sentiment, df_length, df_helpfulness, df_images]
-	reduce(lambda x, y: pd.merge(x, y, on = 'reviewerID'), dfs)
+	df_stats = reduce(lambda x, y: pd.merge(x, y, on = 'reviewerID'), dfs)
 	if verbose:
 		print("Successfully merged statistics computed above")
 
