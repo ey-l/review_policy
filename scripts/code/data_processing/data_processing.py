@@ -1,7 +1,9 @@
 import sys
-sys.path.append('..')
+#sys.path.append('..')
+# Ignore warnings
+#import warnings
+#warnings.filterwarnings('ignore')
 
-# Import libraries
 import csv
 import time
 import json
@@ -11,16 +13,20 @@ import gzip
 import math
 from datetime import datetime, timedelta
 
+from utils import COLS_SIM, NON_TEXT_SIM
+
 import nltk
-nltk.download('vader_lexicon')
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
+nltk.download('vader_lexicon')
 SID = SentimentIntensityAnalyzer()
 
-# Ignore warnings
-#import warnings
-#warnings.filterwarnings('ignore')
-
-from utils import COLS_SIM, NON_TEXT_SIM
+'''
+Process datasets by aggregating review data to a week-product level, specifically by
+    - select relevant columns (e.g., non-textual attributes for now)
+    - parse price ranges to a single integer by getting the mean
+    - get sentiment scores using nltk package
+    - add week dummies
+'''
 
 def nltk_polarity(text):
     if isinstance(text, str):
