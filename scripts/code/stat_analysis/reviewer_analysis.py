@@ -79,31 +79,57 @@ def process_reviews(fp, save_to, verbose=True):
 def get_reviewer_stats(fp, save_to, verbose=True):
 	'''
 	Get stats for each reviewer
-	:param fp: file path to the saved dataset
+	:param fp: file path to read from
+	:param save_to: the file path saved to
 	'''
 	df = pd.read_csv(fp, low_memory=False)
-	df['week'] = df['reviewTime'].apply(lambda x: datetime.strptime(x, '%Y-%m-%d') - timedelta(days=datetime.strptime(x, '%Y-%m-%d').weekday()))
+	#df['week'] = df['reviewTime'].apply(lambda x: datetime.strptime(x, '%Y-%m-%d') - timedelta(days=datetime.strptime(x, '%Y-%m-%d').weekday()))
 	groups = df.groupby(['reviewerID'])
 
-	review_counts = groups['reviewText'].count()
+	review_counts = groups['reviewTime'].count()
 	df_counts = review_counts.to_frame().reset_index().rename(columns={'reviewTime':'total_review_count'})
+	if verbose:
+		print("Successfully computed total review count for each reviewer")
+
 	days = groups['reviewTime'].nunique()
 	df_days = days.to_frame().reset_index().rename(columns={'reviewTime':'day_count'})
+	if verbose:
+		print("Successfully computed day count for each reviewer")
+
 	brands = groups['brand'].nunique()
 	df_brands = brands.to_frame().reset_index().rename(columns={'brand':'brand_count'})
+	if verbose:
+		print("Successfully computed brand count for each reviewer")
+
 	df_ratings = groups['overall'].mean()
 	df_ratings = df_ratings.to_frame().reset_index().rename(columns={'overall':'avg_rating'})
+	if verbose:
+		print("Successfully computed average rating for each reviewer")
+
 	df_sentiment = groups['sentiment'].mean()
 	df_sentiment = df_sentiment.to_frame().reset_index().rename(columns={'sentiment':'avg_sentiment'})
+	if verbose:
+		print("Successfully computed average sentiment for each reviewer")
+
 	df_length = groups['word_count'].mean()
 	df_length = df_length.to_frame().reset_index().rename(columns={'word_count':'avg_word_count'})
+	if verbose:
+		print("Successfully computed average word count for each reviewer")
+
 	df_helpfulness = groups['vote'].mean()
 	df_helpfulness = df_helpfulness.to_frame().reset_index().rename(columns={'vote':'avg_vote'})
+	if verbose:
+		print("Successfully computed average vote count for each reviewer")
+
 	df_images = groups['image'].mean()
 	df_images = df_images.to_frame().reset_index().rename(columns={'image':'avg_images'})
+	if verbose:
+		print("Successfully computed average image count for each reviewer")
 
 	dfs = [df_counts, df_days, df_brands, df_ratings, df_sentiment, df_length, df_helpfulness, df_images]
 	reduce(lambda x, y: pd.merge(x, y, on = 'reviewerID'), dfs)
+	if verbose:
+		print("Successfully merged statistics computed above")
 
 	df_stats['burstness'] = 1-df_stats['day_count']/df_stats['total_review_count']
 	df_stats['repeated_brands'] = 1-df_stats['brand_count']/df_stats['total_review_count']
