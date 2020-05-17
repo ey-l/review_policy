@@ -20,8 +20,8 @@ def get_reviewers(fp, category='Office Products'):
 	:return: a list of reviewerIDs
 	'''
 	df = pd.read_csv(fp, low_memory=False, index_col=0)
-	sub_df = df.loc[df['category'] == category]
-	reviewerIDs = list(set(sub_df.reviewerID))
+	#sub_df = df.loc[df['category'] == category]
+	reviewerIDs = list(set(df.reviewerID))
 	return reviewerIDs
 
 def get_reviews_from_list(p, reviewerIDs, save_to, verbose=True):
@@ -131,11 +131,39 @@ def get_reviewer_stats(fp, save_to, verbose=True):
 	if verbose:
 		print("Successfully merged statistics computed above")
 
-	df_stats['burstness'] = 1-df_stats['day_count']/df_stats['total_review_count']
-	df_stats['repeated_brands'] = 1-df_stats['brand_count']/df_stats['total_review_count']
+	df_stats['burstiness'] = df_stats['total_review_count']/df_stats['day_count']
+	df_stats['repeated_brands'] = df_stats['total_review_count']/df_stats['brand_count']
 
 	df_stats.to_csv(save_to)
 	if verbose:
 		print("Successfully saved reviewer statistics to {}".format(save_to))
 
+if __name__ == "__main__":
+    """
+    Use case
+    """
+    DIR_PATH = '../data/Processed_Julian_Amazon_data'
+
+    q = []
+    q.append(('../data/merged_Cell_Phones_&_Accessories.csv', 'Cell_Phones_and_Accessories'))
+    q.append(('../data/merged_Tools_&_Home_Improvement.csv', 'Tools_and_Home_Improvement'))
+    q.append(('../data/merged_Home_&_Kitchen.csv', 'Home_and_Kitchen'))
+    q.append(('../data/merged_Electronics.csv', 'Electronics'))
+    q.append(('../data/merged_Office_Products.csv', 'Office_Products'))
+    q.append(('../data/merged_Sports_&_Outdoors.csv', 'Sports_and_Outdoors'))
+    q.append(('../data/merged_Patio,_Lawn_&_Garden.csv', 'Patio_Lawn_and_Garden'))
+    q.append(('../data/merged_Pet_Supplies.csv', 'Pet_Supplies'))
+    q.append(('../data/merged_Clothing,_Shoes_&_Jewelry.csv', 'Clothing_Shoes_and_Jewelry'))
+    q.append(('../data/merged_Automotive.csv' ,'Automotive'))
+
+    #fp = DIR_PATH+'/did/reviews_mcauley_description_office_patio.csv'
+    fp = '../data/merged_Office_Products.csv'
+    reviews_w_text = DIR_PATH+'/stat_analysis/office_reviews.csv'
+    reviews_numeric = DIR_PATH+'/stat_analysis/office_reviews_numeric.csv'
+    reviewer_stats = DIR_PATH+'/stat_analysis/office_reviewer_stats.csv'
+
+    reviewerIDs = get_reviewers(fp)
+    get_reviews_from_list(q, reviewerIDs, reviews_w_text)
+    process_reviews(reviews_w_text, reviews_numeric)
+    get_reviewer_stats(reviews_numeric, reviewer_stats)
 

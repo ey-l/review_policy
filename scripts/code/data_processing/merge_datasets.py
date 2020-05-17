@@ -38,9 +38,12 @@ def create_cols(df, cats):
 def merge_datasets(product_path, review_path):
     # Read the files
     reviews = getDF(review_path)
+    print("Loaded review dataset: {}".format(review_path))
     df = getDF(product_path)
+    print("Loaded product dataset:{}".format(product_path))
 
     # Drop irrelevant columns
+    print("Drop irrelevant columns")
     df.drop(['image','feature', 'also_buy', 'also_view', 'similar_item', 'date', 'details', 'tech1'], axis=1, inplace=True)
     
     # Drop records with nan in category
@@ -56,8 +59,9 @@ def merge_datasets(product_path, review_path):
 
     # 1459641600 is the Unix timestamp of 2016-04-03
     # 1491177600 is the Unix timestamp of 2017-04-03
+    # 1522713600 is the Unix timestamp of 2018-04-03
     # Get reviews within the 1 year time frame
-    reviews = reviews.loc[reviews['unixReviewTime'].apply(lambda x: x > 1459641600 and x < 1491177600)]
+    reviews = reviews.loc[reviews['unixReviewTime'].apply(lambda x: x > 1459641600 and x < 1522713600)]
 
     # All records have the same category labels
     cats = []
@@ -121,8 +125,8 @@ if __name__ == "__main__":
     log = "../data/counts.csv"
     q = []
 
-    #q.append(('../data/Julian_Amazon_data/meta_Cell_Phones_and_Accessories.json.gz','../data/Julian_Amazon_data/Cell_Phones_and_Accessories.json.gz'))
-    #q.append(('../data/Julian_Amazon_data/meta_Clothing_Shoes_and_Jewelry.json.gz','../data/Julian_Amazon_data/Clothing_Shoes_and_Jewelry.json.gz'))
+    q.append(('../data/Julian_Amazon_data/meta_Cell_Phones_and_Accessories.json.gz','../data/Julian_Amazon_data/Cell_Phones_and_Accessories.json.gz'))
+    q.append(('../data/Julian_Amazon_data/meta_Clothing_Shoes_and_Jewelry.json.gz','../data/Julian_Amazon_data/Clothing_Shoes_and_Jewelry.json.gz'))
     q.append(('../data/Julian_Amazon_data/meta_Home_and_Kitchen.json.gz','../data/Julian_Amazon_data/Home_and_Kitchen.json.gz'))
     q.append(('../data/Julian_Amazon_data/meta_Electronics.json.gz','../data/Julian_Amazon_data/Electronics.json.gz'))
     q.append(('../data/Julian_Amazon_data/meta_Office_Products.json.gz','../data/Julian_Amazon_data/Office_Products.json.gz'))
@@ -132,6 +136,7 @@ if __name__ == "__main__":
     q.append(('../data/Julian_Amazon_data/meta_Pet_Supplies.json.gz','../data/Julian_Amazon_data/Pet_Supplies.json.gz'))
     q.append(('../data/Julian_Amazon_data/meta_Automotive.json.gz','../data/Julian_Amazon_data/Automotive.json.gz'))
     q.append(('../data/Julian_Amazon_data/meta_Video_Games.json.gz','../data/Julian_Amazon_data/Video_Games.json.gz'))
+    
     #q.append(('../data/Julian_Amazon_data/meta_AMAZON_FASHION.json.gz','../data/Julian_Amazon_data/AMAZON_FASHION.json.gz'))
     #q.append(('../data/Julian_Amazon_data/meta_Appliances.json.gz','../data/Julian_Amazon_data/Appliances.json.gz'))
     #q.append(('../data/Julian_Amazon_data/meta_Industrial_and_Scientific.json.gz','../data/Julian_Amazon_data/Industrial_and_Scientific.json.gz'))

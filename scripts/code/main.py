@@ -8,10 +8,12 @@ import sys
 
 import csv
 import time
+import pandas as pd
 
 # Script
 #from product_matching import tag_incentivized 
-from reviewer_analysis import get_reviews_from_list, get_reviewers, process_reviews, get_reviewer_stats
+#from reviewer_analysis import get_reviews_from_list, get_reviewers, process_reviews, get_reviewer_stats
+from product_analysis import get_products_stats, get_burstiness_stats
 
 
 DIR_PATH = '../data/Processed_Julian_Amazon_data'
@@ -37,12 +39,16 @@ if __name__ == "__main__":
     #q.append(('../data/merged_Appliances.csv', 'Appliances', '../data/Processed_Julian_Amazon_data/doc2vec/Appliances_doc2vec.csv', '../data/Processed_Julian_Amazon_data/sim_reviews/Appliances_similar_reviews.csv'))
     #q.append(('../data/merged_Industrial_and_Scientific.csv'))
 
-    fp = DIR_PATH+'/did/reviews_mcauley_description_office_patio.csv'
-    reviews_w_text = DIR_PATH+'/stat_analysis/office_reviews.csv'
-    reviews_numeric = DIR_PATH+'/stat_analysis/office_reviews_numeric.csv'
-    reviewer_stats = DIR_PATH+'/stat_analysis/office_reviewer_stats.csv'
-    #reviewerIDs = get_reviewers(fp)
-    #get_reviews_from_list(q, reviewerIDs, reviews_w_text)
-    #process_reviews(reviews_w_text, reviews_numeric)
-    get_reviewer_stats(reviews_numeric, reviewer_stats)
+    fp = DIR_PATH+'/did/reviews_mcauley_office_full.csv'
+    #reviews_w_text = DIR_PATH+'/stat_analysis/office_reviews.csv'
+    #reviews_numeric = DIR_PATH+'/stat_analysis/office_reviews_numeric.csv'
+    products_stats = DIR_PATH+'/stat_analysis/office_products_stats.csv'
+    burstiness_stats = DIR_PATH+'/stat_analysis/office_burstiness_stats.csv'
+
+    get_products_stats(fp, products_stats)
+    get_burstiness_stats(fp, burstiness_stats)
+    products = pd.read_csv(products_stats, low_memory=False)
+    burstiness = pd.read_csv(burstiness_stats, low_memory=False)
+    df = pd.merge(products, burstiness, on='asin')
+    df.to_csv(DIR_PATH+'/stat_analysis/office_products_stats.csv', index=False)
 
