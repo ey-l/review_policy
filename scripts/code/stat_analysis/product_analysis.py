@@ -105,7 +105,7 @@ def get_burstiness_stats(fp, save_to, verbose=True):
 	df_merged = pd.merge(df, df_merged, on=['asin','reviewTime'])
 
 	df_merged['threshold_review_count_product'] = df_merged['avg_review_count_product'] + 2*df_merged['std_review_count_product']
-	df_merged['review_count_2std_product'] = np.where(df_merged['word_count'] > df_merged['threshold_review_count_product'], 1, 0)
+	df_merged['review_count_2std_product'] = np.where(df_merged['daily_review_count'] > df_merged['threshold_review_count_product'], 1, 0)
 
 	groups = df_merged.groupby(['asin'])
 
