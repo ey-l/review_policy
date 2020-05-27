@@ -61,7 +61,8 @@ def merge_datasets(product_path, review_path):
     # 1491177600 is the Unix timestamp of 2017-04-03
     # 1522713600 is the Unix timestamp of 2018-04-03
     # Get reviews within the 1 year time frame
-    reviews = reviews.loc[reviews['unixReviewTime'].apply(lambda x: x > 1459641600 and x < 1522713600)]
+    #reviews = reviews.loc[reviews['unixReviewTime'].apply(lambda x: x > 1459641600 and x < 1522713600)]
+    reviews = reviews.loc[reviews['unixReviewTime'].apply(lambda x: x > 1459641600)]
 
     # All records have the same category labels
     cats = []
@@ -86,7 +87,7 @@ def merge_datasets(product_path, review_path):
 
     # Save to file
     name_string = 'merged_'+cats[0].replace(' ','_')
-    df_merged.to_csv('../data/'+name_string+'.csv')
+    df_merged.to_csv('../data/'+name_string+'.csv', index=False)
     print("Successfully merged datasets for category: "+name_string)
 
     # Count the number products in each subcategory

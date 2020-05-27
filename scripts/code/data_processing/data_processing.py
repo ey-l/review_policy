@@ -64,8 +64,8 @@ def get_selected_data(paths, save_to, verbose=True):
         TOP10_SIMILAR = '../data/Processed_Julian_Amazon_data/sim_reviews/'+DATASET_NAME+'_10_similar_reviews.csv'
 	
         # Get selected data columns
-        #df = pd.read_csv(TOP10_SIMILAR, index_col=0, low_memory=False)
-        df = pd.read_csv(ORIGINAL_DATASET, index_col=0, low_memory=False)
+        df = pd.read_csv(TOP10_SIMILAR, index_col=0, low_memory=False)
+        #df = pd.read_csv(ORIGINAL_DATASET, index_col=0, low_memory=False)
         df = df.loc[:,COLS]
         #df = df.loc[:,COLS_SIM]
         df['overall'] = df['overall'].apply(get_int)
@@ -197,7 +197,7 @@ if __name__ == "__main__":
 
     reviews_dataset = '../data/Processed_Julian_Amazon_data/did/reviews_mcauley_office_full.csv' #'../data/merged_McAuley.csv' #'mcauley_top10_numeric.csv'
     products_dataset = '../data/Processed_Julian_Amazon_data/did/products_mcauley_office_full.csv' #'../data/merged_McAuley_weekly.csv'
-    #get_selected_data(q, 'reviews_mcauley_office_full.csv')
+    get_selected_data(q, 'reviews_mcauley_office_full.csv')
     get_weekly_stats('reviews_mcauley_office_full.csv', reviews_dataset)
     #get_products_data(reviews_dataset, products_dataset)
     add_week_numbers(reviews_dataset, reviews_dataset)

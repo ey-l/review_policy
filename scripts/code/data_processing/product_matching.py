@@ -24,8 +24,9 @@ from sklearn.metrics.pairwise import cosine_similarity
 # NLP
 import spacy
 from spacy import displacy
-# Set up NLP
-nlp = spacy.load("en_core_web_sm")
+
+nlp = spacy.load("en_core_web_sm") # Set up NLP
+DIR_PATH = '../data/Processed_Julian_Amazon_data'
 
 # Ignore warnings
 #import warnings
@@ -197,26 +198,26 @@ def get_similar_products(dataset, df_path, vector_path, n):
     all_sims = list(set(all_sims))
 
     # Get the similarity index for top 100 non-amazon products
-    sims_100 = sims.loc[sims.index.map(lambda x: x in all_sims)]
-    print('There are '+str(sims_100.shape[0])+' distinct non-Amazon products in '+dataset)
+    sims_n = sims.loc[sims.index.map(lambda x: x in all_sims)]
+    print('There are '+str(sims_n.shape[0])+' distinct non-Amazon products in '+dataset)
 
     thresholds = df_sims.iloc[9,:].to_dict()
     keys = list(thresholds.keys())
     for i in range(len(keys)):
-        threshold = sims_100.loc[sims_100.index == thresholds[keys[i]]][keys[i]].item()
+        threshold = sims_n.loc[sims_n.index == thresholds[keys[i]]][keys[i]].item()
         thresholds[keys[i]] = threshold
 
     keys = list(thresholds.keys())
     values = list(range(1, len(keys)+1))
     sims_dict = dict(zip(keys, values))
 
-    for i in range(len(sims_100.columns)):
-        col = sims_100.columns[i]
+    for i in range(len(sims_n.columns)):
+        col = sims_n.columns[i]
         t = thresholds[col]
-        sims_100[col] = sims_100[col].apply(lambda x: setZero(x, t))
-        sims_100[col] = sims_100[col].apply(lambda x: makeTuple(x,col))
+        sims_n[col] = sims_n[col].apply(lambda x: setZero(x, t))
+        sims_n[col] = sims_n[col].apply(lambda x: makeTuple(x,col))
 
-    for index, row in sims_100.iterrows():
+    for index, row in sims_n.iterrows():
         new_row = sorted(list(row), key=lambda x: x[1])[::-1]
         for i in range(len(new_row)):
             asin = new_row[i][0]
@@ -229,8 +230,8 @@ def get_similar_products(dataset, df_path, vector_path, n):
 
     # Rename the cols to store the most similar Amazon product for each non-Amazon product
     # since some non-Amazon products get to mapped to multiple Amazon products
-    col_names = ['sim' + str(x) for x in range(1, len(sims_100.columns) + 1)]
-    sims_100.columns = col_names
+    col_names = ['sim' + str(x) for x in range(1, len(sims_n.columns) + 1)]
+    sims_n.columns = col_names
 
     # Get the number of non-Amazon products in each category
     amazon_sims = list(vec_amazon.index)
@@ -239,8 +240,8 @@ def get_similar_products(dataset, df_path, vector_path, n):
     df_all = df.loc[df['asin'].apply(lambda x: x in amazon_sims)] # Dataframe of all non-Amazon products 
 
     # Merge with the review data (i.e., df_all, df_na)
-    sims_100['asin'] = sims_100.index
-    df_test = pd.merge(df_all, sims_100, on='asin', how='left')
+    sims_n['asin'] = sims_n.index
+    df_test = pd.merge(df_all, sims_n, on='asin', how='left')
     df_test[col_names] = df_test[col_names].fillna(0)
     df_test.loc[df_test['asin'].apply(lambda x: x not in all_sims),'sim1'] = df_test['asin']
     log = '../data/Processed_Julian_Amazon_data/sim_reviews/'+dataset+'_'+str(n)+'_similar_reviews.csv'
@@ -320,14 +321,14 @@ def tag_incentive_ngrams(dataset, df_path):
     df_incent.to_csv(log)
     print(dataset + " is logged!")
 
-def tag_incentivized(paths):
+def match_products(paths):
     '''
     Use case:
     q = []
     q.append(...)
     
     for i in q:
-        tag_incentivized(i)
+        match_products(i)
     '''
     df_path = paths[0]
     dataset = paths[1]
@@ -336,7 +337,7 @@ def tag_incentivized(paths):
     similar_df = DIR_PATH+'/sim_reviews/'+dataset+'_10_similar_reviews.csv'
     tagged_path = DIR_PATH+'/tagged/'+dataset+'_merged_reviews_tagged.csv'
     
-    #find_similar_products.get_doc2vec(dataset, df_path)
-    find_similar_products.get_similar_products(dataset, df_path, vectors, 10)
-    #find_similar_products.tag_incentive(dataset, similar_df)
-    #find_similar_products.tag_incentive_ngrams(dataset, tagged_path)
+    get_doc2vec(dataset, df_path)
+    get_similar_products(dataset, df_path, vectors, 10)
+    #tag_incentive(dataset, similar_df)
+    #tag_incentive_ngrams(dataset, tagged_path)
