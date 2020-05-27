@@ -147,22 +147,6 @@ def get_weekly_stats(file_path, save_to, verbose=True):
     if verbose:
         print("Successfully merged statistics computed above")
 
-    '''
-    df_weekly = pd.DataFrame(columns=cols)
-    for group in groups:
-        df_group = group[1]
-        df_group['avg_rating'] = df_group['overall'].mean()
-        df_group['avg_word_count'] = df_group['word_count'].mean()
-        df_group['avg_sentiment'] = df_group['sentiment'].mean()
-        df_group['avg_vote'] = df_group['vote'].mean()
-        df_group['avg_image'] = df_group['image'].mean()
-        df_group['weekly_review_count'] = df_group.shape[0]
-        df_group.drop_duplicates(keep='first', inplace=True)
-        df_weekly = pd.concat([df_weekly, df_group[cols]], ignore_index=True)
-        print('Successfully calculated weekly stats for product ID {} in week {}'.format(group[0][0], group[0][1]))
-    df = pd.merge(df, df_weekly, on=['asin','week'])
-    '''
-
     df = pd.merge(df, df_stats, on=['asin','week'])
     df.to_csv(save_to, index=False)
     print("Successfully saved the file with calculated weekly stats")
