@@ -62,10 +62,10 @@ if __name__ == "__main__":
     get_products_stats(reviews_dataset, products_stats)
     get_product_burstiness_stats(reviews_dataset, products_stats, burstiness_stats)
     merge_datasets(products_stats, burstiness_stats, merged_stats, 'asin')
-    
+
     get_category_stats(reviews_dataset, category_stats)
     get_category_burstiness_stats(reviews_dataset, products_stats, burstiness_stats)
-    merge_datasets(category_stats, burstiness_stats, category_stats, 'category')
+    merge_datasets(category_stats, burstiness_stats, category_stats, 'asin')
     merge_datasets(category_stats, merged_stats, merged_stats, 'asin')
     
 

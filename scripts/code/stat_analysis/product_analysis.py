@@ -232,19 +232,21 @@ def get_category_burstiness_stats(fp, products_stats, save_to, verbose=True):
 	df_counts_product = groups['overall'].count()
 	df_counts_product = df_counts_product.to_frame().reset_index().rename(columns={'overall':'daily_review_count_product'})
 	if verbose:
-		print("Successfully computed daily review count for each category")
+		print("Successfully computed daily review count for each product")
 
 	df_counts = pd.merge(df_counts, df_counts_product, on=['category','reviewTime'])
 	df_counts['daily_review_count_2std_category'] = np.where(df_counts['daily_review_count_product'] > df_counts['threshold_daily_review_count_category'], 1, 0)
 
-	groups = df_counts.groupby(['category'])
+	groups = df_counts.groupby(['asin'])
 
 	df_category_2std = groups['daily_review_count_2std_category'].sum()
 	df_category_2std = df_category_2std.to_frame().reset_index().rename(columns={'daily_review_count_2std_category':'review_count_2std_n_category'})
 	if verbose:
-		print("Successfully counted reviews that exceed 2std threshold for each category")
+		print("Successfully counted reviews that exceed 2std threshold for each product")
 
-	df_stats = pd.merge(df_counts, df_category_2std, on='category')
+	df_stats = pd.merge(df_counts, df_category_2std, on='asin')
+	cols = ['threshold_daily_review_count_category', 'asin', 'review_count_2std_n_category']
+	df_stats = df_stats[cols].drop_duplicates(keep='first')
 	df_stats.to_csv(save_to, index=False)
 	if verbose:
 		print("Successfully saved category statistics to {}".format(save_to))
