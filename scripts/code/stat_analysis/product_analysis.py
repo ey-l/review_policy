@@ -59,7 +59,8 @@ def get_products_stats(fp, save_to, verbose=True):
 	df_stats['product_life_length'] = df_stats['product_life_length'].apply(lambda x: x.days)
 
 	df_merged = pd.merge(df, df_stats, on='asin')
-	print(df_merged.head())
+	if verbose:
+		print(df_merged.head())
 	df_merged['threshold_word_count_product'] = df_merged['avg_word_count_product'] + 2*df_merged['std_word_count_product']
 	df_merged['word_count_2std_product'] = np.where(df_merged['word_count'] > df_merged['threshold_word_count_product'], 1, 0)
 

@@ -108,6 +108,7 @@ def get_selected_columns(file_path, save_to):
 def get_weekly_stats(file_path, save_to, verbose=True):
     df = pd.read_csv(file_path, index_col=0, low_memory=False)
     df['week'] = df['reviewTime'].apply(lambda x: datetime.strptime(x, '%Y-%m-%d') - timedelta(days=datetime.strptime(x, '%Y-%m-%d').weekday()))
+    df['is_5_stars'] = np.where(df['overall'] == 5, 1, 0)
     groups = df.groupby(['asin','week'])
     #groups = df.groupby(['asin','week'], as_index=False)
     #cols = ['asin','week','avg_rating','weekly_review_count','avg_word_count','avg_sentiment','avg_vote','avg_image']
@@ -142,18 +143,37 @@ def get_weekly_stats(file_path, save_to, verbose=True):
     if verbose:
         print("Successfully computed avg_image for each reviewer by week")
 
-    dfs = [df_counts, df_ratings, df_sentiment, df_length, df_helpfulness, df_images]
+    df_votes = groups['vote'].mean()
+    df_votes = df_votes.to_frame().reset_index().rename(columns={'vote':'weekly_vote_count'})
+    if verbose:
+        print("Successfully computed weekly_vote_count for each reviewer by week")
+
+    groups = df.groupby(['asin','week', 'is_5_stars'])
+
+    df_votes_split = groups['vote'].mean()
+    df_votes_split = df_votes_split.to_frame().reset_index().rename(columns={'vote':'avg_vote'})
+    df_votes_split.set_index(['asin','week','is_5_stars'], inplace=True)
+    df_votes_split = df_votes_split.unstack()
+    df_votes_split.columns = df_votes_split.columns.droplevel()
+    df_votes_split.reset_index(inplace=True)
+    df_votes_split.columns = ['asin','week','non_5_stars','5_stars']
+    df_votes_split.fillna(value=0, inplace=True)
+    if verbose:
+        print("Successfully computed avg_vote for each reviewer by week")
+
+    dfs = [df_counts, df_ratings, df_sentiment, df_length, df_helpfulness, df_images, df_votes]
     df_stats = reduce(lambda x, y: pd.merge(x, y, on=['asin','week']), dfs)
     if verbose:
         print("Successfully merged statistics computed above")
 
     df = pd.merge(df, df_stats, on=['asin','week'])
+    df = pd.merge(df, df_votes_split, on=['asin','week'])
     df.to_csv(save_to, index=False)
     print("Successfully saved the file with calculated weekly stats")
 
 def get_products_data(file_path, save_to):
     df = pd.read_csv(file_path, low_memory=False)
-    df_cols = ['asin','week','category','brand','price','main_cat','sim1','amazon','avg_rating','weekly_review_count','avg_word_count','avg_sentiment','avg_vote','avg_image']
+    df_cols = ['asin','week','category','brand','price','main_cat','sim1','amazon','avg_rating','weekly_review_count','avg_word_count','avg_sentiment','avg_vote','avg_image','weekly_vote_count','non_5_stars','5_stars']
     df_products = df[df_cols]
     df_products.drop_duplicates(keep='first',inplace=True)
     df_products.to_csv(save_to, index=False)
