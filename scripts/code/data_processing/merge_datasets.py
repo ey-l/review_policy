@@ -90,16 +90,6 @@ def merge_datasets(product_path, review_path):
     df_merged.to_csv('../data/'+name_string+'.csv', index=False)
     print("Successfully merged datasets for category: "+name_string)
 
-    # Count the number products in each subcategory
-    #cols = ['asin','amazon'] + cats
-    #df_asin = df_merged[cols].drop_duplicates()
-    #products_count = df_asin.groupby([df_asin['amazon']]).sum().astype(int)
-
-    # Count the number reviews in each subcategory
-    #reviews_count = df_merged.groupby([df_merged['amazon']]).sum().astype(int)[cats]
-
-    #return [cats[0], products_count.iloc[1,0], reviews_count.iloc[1,0], products_count.iloc[0,0], reviews_count.iloc[0,0]]
-
 def get_counts(log_path, paths):
     """
     Merge the product meta dataset and the review dataset of a category, get the count of Amazon and non-Amazon products
@@ -107,7 +97,7 @@ def get_counts(log_path, paths):
     :param paths: tuples of raw meta data and review data
     """
     merge_datasets(paths[0], paths[1])
-    '''
+
     with open(log_path, 'a') as csvfile:
         fieldnames = ['category','amazon_products','amazon_reviews','nonamazon_products','nonamazon_reviews','time'] # time in min
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -117,7 +107,6 @@ def get_counts(log_path, paths):
         end = time.time()
         print((end - start)/60)
         writer.writerow({'category':results[0], 'amazon_products': results[1], 'amazon_reviews': results[2], 'nonamazon_products': results[3], 'nonamazon_reviews': results[4], 'time': (end - start)/60})
-    '''
 
 if __name__ == "__main__":
     """
@@ -137,12 +126,10 @@ if __name__ == "__main__":
     q.append(('../data/Julian_Amazon_data/meta_Pet_Supplies.json.gz','../data/Julian_Amazon_data/Pet_Supplies.json.gz'))
     q.append(('../data/Julian_Amazon_data/meta_Automotive.json.gz','../data/Julian_Amazon_data/Automotive.json.gz'))
     q.append(('../data/Julian_Amazon_data/meta_Video_Games.json.gz','../data/Julian_Amazon_data/Video_Games.json.gz'))
-    
     #q.append(('../data/Julian_Amazon_data/meta_AMAZON_FASHION.json.gz','../data/Julian_Amazon_data/AMAZON_FASHION.json.gz'))
     #q.append(('../data/Julian_Amazon_data/meta_Appliances.json.gz','../data/Julian_Amazon_data/Appliances.json.gz'))
     #q.append(('../data/Julian_Amazon_data/meta_Industrial_and_Scientific.json.gz','../data/Julian_Amazon_data/Industrial_and_Scientific.json.gz'))
 
     for i in q:
-    	#get_counts(log, i)
         merge_datasets(i[0], i[1])
 

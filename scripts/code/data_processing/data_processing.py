@@ -56,7 +56,7 @@ def handle_price(x):
         return x
     return np.NaN
 
-def get_selected_data(paths, save_to, verbose=True):
+def get_numeric_columns(paths, save_to, verbose=True):
     df_list = []
     for i in paths:
         ORIGINAL_DATASET = i[0]
@@ -181,7 +181,7 @@ if __name__ == "__main__":
 
     reviews_dataset = '../data/Processed_Julian_Amazon_data/did/reviews_mcauley_office_full.csv' #'../data/merged_McAuley.csv' #'mcauley_top10_numeric.csv'
     products_dataset = '../data/Processed_Julian_Amazon_data/did/products_mcauley_office_full.csv' #'../data/merged_McAuley_weekly.csv'
-    get_selected_data(q, 'reviews_mcauley_office_full.csv')
+    get_numeric_columns(q, 'reviews_mcauley_office_full.csv')
     get_weekly_stats('reviews_mcauley_office_full.csv', reviews_dataset)
     #get_products_data(reviews_dataset, products_dataset)
     add_week_numbers(reviews_dataset, reviews_dataset)
