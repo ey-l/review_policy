@@ -64,7 +64,7 @@ def get_selected_data(paths, save_to, verbose=True):
         TOP10_SIMILAR = '../data/Processed_Julian_Amazon_data/sim_reviews/'+DATASET_NAME+'_10_similar_reviews.csv'
 	
         # Get selected data columns
-        df = pd.read_csv(TOP10_SIMILAR, index_col=0, low_memory=False)
+        df = pd.read_csv(TOP10_SIMILAR, low_memory=False)
         #df = pd.read_csv(ORIGINAL_DATASET, index_col=0, low_memory=False)
         df = df.loc[:,COLS]
         #df = df.loc[:,COLS_SIM]
@@ -102,11 +102,11 @@ def get_selected_columns(file_path, save_to):
     #df = df.loc[:, NON_TEXT_SIM]
     df = df.loc[:, NON_TEXT]
     print(df.shape[0])
-    df.to_csv(save_to)
+    df.to_csv(save_to, index=False)
     print("Successfully saved the file with selected columns")
 
 def get_weekly_stats(file_path, save_to, verbose=True):
-    df = pd.read_csv(file_path, index_col=0)
+    df = pd.read_csv(file_path, index_col=0, low_memory=False)
     df['week'] = df['reviewTime'].apply(lambda x: datetime.strptime(x, '%Y-%m-%d') - timedelta(days=datetime.strptime(x, '%Y-%m-%d').weekday()))
     groups = df.groupby(['asin','week'])
     #groups = df.groupby(['asin','week'], as_index=False)
@@ -156,7 +156,7 @@ def get_products_data(file_path, save_to):
     df_cols = ['asin','week','category','brand','price','main_cat','sim1','amazon','avg_rating','weekly_review_count','avg_word_count','avg_sentiment','avg_vote','avg_image']
     df_products = df[df_cols]
     df_products.drop_duplicates(keep='first',inplace=True)
-    df_products.to_csv(save_to)
+    df_products.to_csv(save_to, index=False)
     print("Successfully saved the file with calculated weekly stats for products only")
 
 def add_week_numbers(file_path, save_to):
@@ -167,7 +167,7 @@ def add_week_numbers(file_path, save_to):
     nums = list(range(len(weeks)))
     week_dict = dict(zip(weeks,nums))
     df['week_num'] = df['week'].apply(lambda x: week_dict[x])
-    df.to_csv(save_to)
+    df.to_csv(save_to, index=False)
     print("Successfully saved the file with week numbers")
 
 if __name__ == "__main__":

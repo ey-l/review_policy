@@ -53,10 +53,9 @@ if __name__ == "__main__":
     #    match_products(i)
 
     #get_selected_data(q, reviews_dataset)
-    #get_weekly_stats(reviews_dataset, products_dataset)
-    #get_products_data(products_dataset, products_dataset)
-    #add_week_numbers(reviews_dataset, reviews_dataset)
-    #add_week_numbers(products_dataset, products_dataset)
+    get_weekly_stats(reviews_dataset, products_dataset)
+    get_products_data(products_dataset, products_dataset)
+    add_week_numbers(products_dataset, products_dataset)
 
     
     get_products_stats(reviews_dataset, products_stats)

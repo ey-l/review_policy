@@ -97,7 +97,7 @@ def ifNegation_tree(x, incentivized_flags):
 
 def get_doc2vec(dataset, df_path):
     # Read the merged review file
-    reviews = pd.read_csv(df_path, index_col=0, low_memory=False)
+    reviews = pd.read_csv(df_path, low_memory=False)
     reviews = reviews[reviews['title'].map(str).map(len) < 1000]
 
     # Remove asin with less than 10 reviews
@@ -146,12 +146,11 @@ def get_doc2vec(dataset, df_path):
     vectors = pd.DataFrame.from_dict(final_dict, orient = 'index')
     log = '../data/Processed_Julian_Amazon_data/doc2vec/'+dataset+'_description.csv'
     vectors.to_csv(log)
-    #return vectors
     print(dataset + " is logged!")
 
 def get_similar_products(dataset, df_path, vector_path, n):
     # Read the merged review file
-    df = pd.read_csv(df_path, index_col=0, low_memory=False)
+    df = pd.read_csv(df_path, low_memory=False)
     #df.rename(columns={'image_y': 'image'}, inplace=True)
 
     # Read doc2vec file
@@ -159,10 +158,14 @@ def get_similar_products(dataset, df_path, vector_path, n):
 
     # Get a list of Amazon product ids
     df_amazon = df.loc[df['amazon'] == 1]
-    asin_amazon = df_amazon['asin']
+    asin_amazon = df_amazon['asin'].drop_duplicates(keep='first')
+    print(df_amazon.columns)
+    print(df_amazon.head())
+    print(vectors.index)
 
     # Get Amazon product vectors
-    vec_amazon = vectors.loc[vectors.index.isin(asin_amazon)]
+    vec_amazon = vectors[vectors.index.isin(asin_amazon)]
+    print(vec_amazon)
 
     # Take set difference
     vectors = pd.concat([vectors, vec_amazon, vec_amazon]).drop_duplicates(keep=False)
@@ -184,7 +187,7 @@ def get_similar_products(dataset, df_path, vector_path, n):
     df_size = pd.DataFrame.from_dict(sim_size)
     df_size.index = sims.columns
     log = '../data/Processed_Julian_Amazon_data/sim_threshold/'+dataset+'_sim_threshold.csv'
-    df_size.to_csv(log)
+    df_size.to_csv(log, index=False)
 
     # Get the top 100 most similar non-Amazon products for each Amazon product
     df_sims = {}
@@ -245,7 +248,7 @@ def get_similar_products(dataset, df_path, vector_path, n):
     df_test[col_names] = df_test[col_names].fillna(0)
     df_test.loc[df_test['asin'].apply(lambda x: x not in all_sims),'sim1'] = df_test['asin']
     log = '../data/Processed_Julian_Amazon_data/sim_reviews/'+dataset+'_'+str(n)+'_similar_reviews.csv'
-    df_test.to_csv(log)
+    df_test.to_csv(log, index=False)
 
     #return df_test
     print(dataset + " is logged!")
@@ -253,7 +256,7 @@ def get_similar_products(dataset, df_path, vector_path, n):
 # Takes in a merged review file
 def tag_incentive(dataset, df_path):
     # Read the merged review file
-    df = pd.read_csv(df_path, index_col=0, low_memory=False)
+    df = pd.read_csv(df_path, low_memory=False)
     
     # Get review lemma
     df['reviewText'] = df['reviewText'].fillna(value=".")
@@ -263,7 +266,7 @@ def tag_incentive(dataset, df_path):
     reviewText = pd.DataFrame(df['reviewText'])
     reviewText['lemmaText'] = reviewText['reviewText'].apply(get_review_lemma)
     log = '../data/Processed_Julian_Amazon_data/lemma/'+dataset+'_wlemma.csv'
-    reviewText.to_csv(log)
+    reviewText.to_csv(log, index=False)
     print(dataset + " lemma is logged!")
 
     # NLP steps to identify intentivized reviews
@@ -276,7 +279,7 @@ def tag_incentive(dataset, df_path):
     
     # Save results
     log = '../data/Processed_Julian_Amazon_data/'+dataset+'_stats.csv'
-    reviews.groupby(['if_neg']).count().to_csv(log)
+    reviews.groupby(['if_neg']).count().to_csv(log, index=False)
     print(dataset + " incentivized review stats is logged!")
 
     # Merge with the full review dataset
@@ -289,19 +292,19 @@ def tag_incentive(dataset, df_path):
     
     # Save results
     log = '../data/Processed_Julian_Amazon_data/tagged/'+dataset+'_merged_reviews_tagged.csv'
-    df_incent.to_csv(log)
+    df_incent.to_csv(log, index=False)
     print(dataset + " is logged!")
 
 # Takes in a merged review file
 def tag_incentive_ngrams(dataset, df_path):
     # Read the merged review file
-    df = pd.read_csv(df_path, index_col=0, low_memory=False)
+    df = pd.read_csv(df_path, low_memory=False)
 
     lemma_path = '../data/Processed_Julian_Amazon_data/lemma/'+dataset+'_wlemma.csv'
-    lemma_df = pd.read_csv(lemma_path, index_col=0, low_memory=False)
+    lemma_df = pd.read_csv(lemma_path, low_memory=False)
     reviewText = pd.DataFrame(lemma_df['lemmaText'])
 
-    merged_inc_diff = pd.read_csv('../data/reviewMeta/reviewMeta_incentive_text_ngrams.csv', index_col=0, low_memory=False)
+    merged_inc_diff = pd.read_csv('../data/reviewMeta/reviewMeta_incentive_text_ngrams.csv', low_memory=False)
     incentivized_flags = list(merged_inc_diff['ngrams'])
 
     reviews = reviewText.loc[reviewText['lemmaText'].apply(lambda x: any([k in x for k in incentivized_flags]))]
@@ -313,12 +316,12 @@ def tag_incentive_ngrams(dataset, df_path):
 
     # Save results
     log = '../data/Processed_Julian_Amazon_data/'+dataset+'_stats.csv'
-    df_incent.groupby(['incentivized','incentivized_ngrams']).count().to_csv(log)
+    df_incent.groupby(['incentivized','incentivized_ngrams']).count().to_csv(log, index=False)
     print(dataset + " incentivized review stats is logged!")
 
     # Save results
     log = '../data/Processed_Julian_Amazon_data/tagged/'+dataset+'_ngrams.csv'
-    df_incent.to_csv(log)
+    df_incent.to_csv(log, index=False)
     print(dataset + " is logged!")
 
 def match_products(paths):
