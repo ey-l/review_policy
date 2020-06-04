@@ -71,6 +71,7 @@ def get_numeric_columns(paths, save_to, verbose=True):
         df['overall'] = df['overall'].apply(get_int)
         df['vote'] = df['vote'].apply(get_int)
         df['reviewTime'] = df['reviewTime'].apply(lambda x: str(datetime.strptime(x, '%m %d, %Y').date()))
+        df['week'] = df['reviewTime'].apply(lambda x: datetime.strptime(x, '%Y-%m-%d') - timedelta(days=datetime.strptime(x, '%Y-%m-%d').weekday()))
         df['word_count'] = df['reviewText'].apply(lambda x: len(str(x)))
         df['sentiment'] = df['reviewText'].apply(nltk_polarity)
         df['image'] = df['image'].apply(get_image_count)

@@ -15,7 +15,7 @@ COLS = ['overall','vote', 'verified', 'reviewTime', 'reviewerID', 'asin', 'revie
        'description', 'title', 'brand', 'rank', 'price', 'fit', 'main_cat',
        'tech2', 'amazon']
 NON_TEXT = ['X','overall', 'vote', 'verified', 'reviewTime', 'reviewerID', 'asin', 'word_count',
-            'sentiment','image', 'category', 'brand', 'price', 'main_cat', 'amazon']
+            'sentiment','image', 'category', 'brand', 'price', 'main_cat', 'amazon', 'week']
 COLS_SIM = COLS.append('sim1')
 NON_TEXT_SIM = NON_TEXT.append('sim1')
 

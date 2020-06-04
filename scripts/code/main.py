@@ -15,6 +15,7 @@ import pandas as pd
 from product_analysis import get_products_stats, get_category_stats, get_product_burstiness_stats, get_category_burstiness_stats, merge_datasets
 from product_matching import match_products
 from data_processing import get_numeric_columns, get_products_data, get_weekly_stats, add_week_numbers
+from product_week import get_product_week_stats
 
 
 DIR_PATH = '../data/Processed_Julian_Amazon_data'
@@ -48,19 +49,24 @@ if __name__ == "__main__":
     category_stats = DIR_PATH+'/stat_analysis/category_stats_top10_extend.csv'
     burstiness_stats = DIR_PATH+'/stat_analysis/burstiness_stats_top10_extend.csv'
     merged_stats = DIR_PATH+'/stat_analysis/products_stats_top10_extend.csv'
+    product_week_stats = DIR_PATH+'/stat_analysis/products_week_stats_top10_extend.csv'
 
     # Get the matched datasets
     #for i in q:
     #    match_products(i)
 
+    '''
     # Get numeric columns from the matched datasets
-    #get_numeric_columns(q, reviews_dataset)
+    get_numeric_columns(q, reviews_dataset)
+    add_week_numbers(reviews_dataset, reviews_dataset)
 
     # Aggregate to a product-week level
     get_weekly_stats(reviews_dataset, products_dataset)
     get_products_data(products_dataset, products_dataset)
     add_week_numbers(products_dataset, products_dataset)
+    '''
 
+    '''
     # Get product-level stats on word count and bustiness
     get_products_stats(reviews_dataset, products_stats)
     get_product_burstiness_stats(reviews_dataset, products_stats, burstiness_stats)
@@ -71,5 +77,9 @@ if __name__ == "__main__":
     get_category_burstiness_stats(reviews_dataset, products_stats, burstiness_stats)
     merge_datasets(category_stats, burstiness_stats, category_stats, 'asin')
     merge_datasets(category_stats, merged_stats, merged_stats, 'asin')
+    '''
+
+    # Get product-week level stats
+    get_product_week_stats(reviews_dataset, products_stats, product_week_stats)
     
 
