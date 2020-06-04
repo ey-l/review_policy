@@ -102,9 +102,8 @@ def get_product_week_stats(fp, products_stats, save_to, verbose=True):
 	word_count_threshold = get_word_count_threshold(fp)
 	df = pd.merge(df, word_count_threshold, on='asin')
 	df['word_count_2std_product'] = np.where(df['word_count'] > df['threshold_word_count_product'], 1, 0)
-	category = df[['asin','category']].drop_duplicates(keep='first', inplace=True)
 	
-	groups = df.groupby(['asin','week'])
+	groups = df.groupby(['asin','week','category'])
 	# Computed total review count
 	review_counts = groups['reviewTime'].count()
 	review_counts = review_counts.to_frame().reset_index().rename(columns={'reviewTime':'weekly_review_count'})
@@ -141,7 +140,7 @@ def get_product_week_stats(fp, products_stats, save_to, verbose=True):
 	groups = result.groupby(['asin'])
 	review_counts = groups['weekly_review_count'].sum()
 	review_counts = review_counts.to_frame().reset_index().rename(columns={'weekly_review_count':'total_review_count'})
-	dfs = [result, category, review_counts]
+	dfs = [result, review_counts]
 	result = reduce(lambda x, y: pd.merge(x, y, on=['asin']), dfs)
 
 	result.to_csv(save_to, index=False)
