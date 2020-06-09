@@ -51,6 +51,7 @@ if __name__ == "__main__":
     merged_stats = DIR_PATH+'/stat_analysis/products_stats_top10_extend.csv'
     product_week_stats = DIR_PATH+'/stat_analysis/products_week_stats_top10_extend.csv'
 
+    '''
     # Get the matched datasets
     for i in q:
         match_products(i)
@@ -62,6 +63,7 @@ if __name__ == "__main__":
 
     # Aggregate to a product-week level
     get_weekly_stats(reviews_dataset, products_dataset)
+    '''
     get_products_data(products_dataset, products_dataset)
     add_week_numbers(products_dataset, products_dataset)
     '''

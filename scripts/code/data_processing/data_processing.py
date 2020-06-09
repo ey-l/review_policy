@@ -158,7 +158,7 @@ def get_weekly_stats(file_path, save_to, verbose=True):
 
 def get_products_data(file_path, save_to):
     df = pd.read_csv(file_path, low_memory=False)
-    df_cols = ['asin','week','category','brand','price','main_cat','sim1','amazon','avg_rating','weekly_review_count','avg_word_count','avg_sentiment','avg_vote','avg_image','weekly_vote_count','non_5_stars','5_stars']
+    df_cols = ['asin','week','category','brand','price','main_cat','sim1','amazon','avg_rating','weekly_review_count','avg_word_count','avg_sentiment','avg_vote','avg_image','weekly_vote_count','non_5_stars_reviews_count','5_stars_reviews_count','non_5_stars_avg_vote','5_stars_avg_vote']
     df_products = df[df_cols]
     df_products.drop_duplicates(keep='first',inplace=True)
     df_products.to_csv(save_to, index=False)
