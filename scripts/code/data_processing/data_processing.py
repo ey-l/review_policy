@@ -114,61 +114,45 @@ def get_weekly_stats(file_path, save_to, verbose=True):
     #groups = df.groupby(['asin','week'], as_index=False)
     #cols = ['asin','week','avg_rating','weekly_review_count','avg_word_count','avg_sentiment','avg_vote','avg_image']
 
-    review_counts = groups['reviewTime'].count()
-    df_counts = review_counts.to_frame().reset_index().rename(columns={'reviewTime':'weekly_review_count'})
-    if verbose:
-        print("Successfully computed weekly_review_count for each reviewer by week")
+    df_counts = groups['reviewTime'].count().to_frame().reset_index().rename(columns={'reviewTime':'weekly_review_count'})
 
-    df_ratings = groups['overall'].mean()
-    df_ratings = df_ratings.to_frame().reset_index().rename(columns={'overall':'avg_rating'})
-    if verbose:
-        print("Successfully computed avg_rating for each reviewer by week")
+    df_ratings = groups['overall'].mean().reset_index().rename(columns={'overall':'avg_rating'})
 
-    df_length = groups['word_count'].mean()
-    df_length = df_length.to_frame().reset_index().rename(columns={'word_count':'avg_word_count'})
-    if verbose:
-        print("Successfully computed avg_word_count for each reviewer by week")
+    df_length = groups['word_count'].mean().reset_index().rename(columns={'word_count':'avg_word_count'})
 
-    df_helpfulness = groups['vote'].mean()
-    df_helpfulness = df_helpfulness.to_frame().reset_index().rename(columns={'vote':'avg_vote'})
-    if verbose:
-        print("Successfully computed avg_vote for each reviewer by week")
+    df_helpfulness = groups['vote'].mean().to_frame().reset_index().rename(columns={'vote':'avg_vote'})
 
-    df_sentiment = groups['sentiment'].mean()
-    df_sentiment = df_sentiment.to_frame().reset_index().rename(columns={'sentiment':'avg_sentiment'})
-    if verbose:
-        print("Successfully computed avg_sentiment for each reviewer by week")
+    df_sentiment = groups['sentiment'].mean().to_frame().reset_index().rename(columns={'sentiment':'avg_sentiment'})
 
-    df_images = groups['image'].mean()
-    df_images = df_images.to_frame().reset_index().rename(columns={'image':'avg_image'})
-    if verbose:
-        print("Successfully computed avg_image for each reviewer by week")
+    df_images = groups['image'].mean().to_frame().reset_index().rename(columns={'image':'avg_image'})
 
-    df_votes = groups['vote'].mean()
-    df_votes = df_votes.to_frame().reset_index().rename(columns={'vote':'weekly_vote_count'})
-    if verbose:
-        print("Successfully computed weekly_vote_count for each reviewer by week")
+    df_votes = groups['vote'].mean().to_frame().reset_index().rename(columns={'vote':'weekly_vote_count'})
 
     groups = df.groupby(['asin','week', 'is_5_stars'])
 
-    df_votes_split = groups['vote'].mean()
-    df_votes_split = df_votes_split.to_frame().reset_index().rename(columns={'vote':'avg_vote'})
-    df_votes_split.set_index(['asin','week','is_5_stars'], inplace=True)
-    df_votes_split = df_votes_split.unstack()
-    df_votes_split.columns = df_votes_split.columns.droplevel()
-    df_votes_split.reset_index(inplace=True)
-    df_votes_split.columns = ['asin','week','non_5_stars','5_stars']
-    df_votes_split.fillna(value=0, inplace=True)
-    if verbose:
-        print("Successfully computed avg_vote for each reviewer by week")
+    # Computed avg_vote for each reviewer by week for 5-star and non-5-star reviews
+    df_votes_star = groups['vote'].mean().to_frame().reset_index().rename(columns={'vote':'avg_vote'})
+    df_votes_star.set_index(['asin','week','is_5_stars'], inplace=True)
+    df_votes_star = df_votes_star.unstack()
+    df_votes_star.columns = df_votes_star.columns.droplevel()
+    df_votes_star.reset_index(inplace=True)
+    df_votes_star.columns = ['asin','week','non_5_stars_avg_vote','5_stars_avg_vote']
+    df_votes_star.fillna(value=0, inplace=True)
 
-    dfs = [df_counts, df_ratings, df_sentiment, df_length, df_helpfulness, df_images, df_votes]
+    # Computed reviews_count for each reviewer by week for 5-star and non-5-star reviews
+    df_count_star = groups['reviewTime'].count().to_frame().reset_index().rename(columns={'vote':'reviews_count'})
+    df_count_star.set_index(['asin','week','is_5_stars'], inplace=True)
+    df_count_star = df_count_star.unstack()
+    df_count_star.columns = df_count_star.columns.droplevel()
+    df_count_star.reset_index(inplace=True)
+    df_count_star.columns = ['asin','week','non_5_stars_reviews_count','5_stars_reviews_count']
+    df_count_star.fillna(value=0, inplace=True)
+
+    # Merged statistics computed above
+    dfs = [df_counts, df_ratings, df_sentiment, df_length, df_helpfulness, df_images, df_votes, df_votes_star, df_count_star]
     df_stats = reduce(lambda x, y: pd.merge(x, y, on=['asin','week']), dfs)
-    if verbose:
-        print("Successfully merged statistics computed above")
 
     df = pd.merge(df, df_stats, on=['asin','week'])
-    df = pd.merge(df, df_votes_split, on=['asin','week'])
     df.to_csv(save_to, index=False)
     print("Successfully saved the file with calculated weekly stats")
 

@@ -52,10 +52,10 @@ if __name__ == "__main__":
     product_week_stats = DIR_PATH+'/stat_analysis/products_week_stats_top10_extend.csv'
 
     # Get the matched datasets
-    #for i in q:
-    #    match_products(i)
+    for i in q:
+        match_products(i)
 
-    '''
+
     # Get numeric columns from the matched datasets
     get_numeric_columns(q, reviews_dataset)
     add_week_numbers(reviews_dataset, reviews_dataset)
@@ -77,7 +77,7 @@ if __name__ == "__main__":
     get_category_burstiness_stats(reviews_dataset, products_stats, burstiness_stats)
     merge_datasets(category_stats, burstiness_stats, category_stats, 'asin')
     merge_datasets(category_stats, merged_stats, merged_stats, 'asin')
-    '''
+
 
     # Get product-week level stats
     get_product_week_stats(reviews_dataset, products_stats, product_week_stats)

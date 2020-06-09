@@ -101,8 +101,11 @@ def get_doc2vec(dataset, df_path):
     reviews = reviews[reviews['title'].map(str).map(len) < 1000]
 
     # Remove asin with less than 10 reviews
+    reviews['reviewTime'] = reviews['reviewTime'].apply(lambda x: str(datetime.strptime(x, '%m %d, %Y').date()))
+    reviews['before_ban'] = np.where(reviews['reviewTime'] < '2016-10-03', 1, 0)
     reviews['review_count'] = reviews.groupby('asin')['asin'].transform('count') # Count reviews/asin
-    reviews = reviews.loc[reviews['review_count'] > 10]
+    reviews['review_count_before'] = reviews.groupby('asin')['before_ban'].transform('sum') # Count reviews/asin
+    reviews = reviews.loc[reviews['review_count_before'] >= 10]
 
     # Drop all columns except for item_id and text
     item_id = 'asin'
@@ -146,7 +149,7 @@ def get_doc2vec(dataset, df_path):
     vectors = pd.DataFrame.from_dict(final_dict, orient = 'index')
     log = '../data/Processed_Julian_Amazon_data/doc2vec/'+dataset+'_description.csv'
     vectors.to_csv(log)
-    print(dataset + " is logged!")
+    print(dataset + "_description is logged to {}".format(log))
 
 def get_similar_products(dataset, df_path, vector_path, n):
     # Read the merged review file
@@ -159,13 +162,9 @@ def get_similar_products(dataset, df_path, vector_path, n):
     # Get a list of Amazon product ids
     df_amazon = df.loc[df['amazon'] == 1]
     asin_amazon = df_amazon['asin'].drop_duplicates(keep='first')
-    print(df_amazon.columns)
-    print(df_amazon.head())
-    print(vectors.index)
 
     # Get Amazon product vectors
     vec_amazon = vectors[vectors.index.isin(asin_amazon)]
-    print(vec_amazon)
 
     # Take set difference
     vectors = pd.concat([vectors, vec_amazon, vec_amazon]).drop_duplicates(keep=False)
@@ -175,19 +174,6 @@ def get_similar_products(dataset, df_path, vector_path, n):
     sims = pd.DataFrame(sims)
     sims.columns = vec_amazon.index
     sims.index = vectors.index
-
-    # Get the number of non-Amazon products for each Amazon product at each similarity threshold
-    sim_threshold = [0.95, 0.90, 0.8, 0.7, 0.5] #[0.99, 0.985, 0.98, 0.975, 0.97]
-    sim_size = {}
-    for t in sim_threshold:
-        size = []
-        for i in range(len(sims.columns)):
-            size.append(len(sims.loc[sims[sims.columns[i]] > t]))
-        sim_size[t] = size
-    df_size = pd.DataFrame.from_dict(sim_size)
-    df_size.index = sims.columns
-    log = '../data/Processed_Julian_Amazon_data/sim_threshold/'+dataset+'_sim_threshold.csv'
-    df_size.to_csv(log, index=False)
 
     # Get the top 100 most similar non-Amazon products for each Amazon product
     df_sims = {}
@@ -251,7 +237,7 @@ def get_similar_products(dataset, df_path, vector_path, n):
     df_test.to_csv(log, index=False)
 
     #return df_test
-    print(dataset + " is logged!")
+    print(dataset + "_similar_reviews is logged to {}".format(log))
 
 # Takes in a merged review file
 def tag_incentive(dataset, df_path):
