@@ -142,8 +142,36 @@ def get_product_week_stats(fp, products_stats, save_to, verbose=True):
 	review_counts = review_counts.to_frame().reset_index().rename(columns={'weekly_review_count':'total_review_count'})
 	dfs = [result, review_counts]
 	result = reduce(lambda x, y: pd.merge(x, y, on=['asin']), dfs)
+	
+	# Compute weekly 5-star review statistics
+	df['is_5_stars'] = np.where(df['overall'] == 5, 1, 0)
+	groups = df.groupby(['asin','week','is_5_stars'])
 
-	result.to_csv(save_to, index=False)
+	# Computed avg_vote for each reviewer by week for 5-star and non-5-star reviews
+	df_votes_star = groups['vote'].mean().to_frame().reset_index().rename(columns={'vote':'avg_vote'})
+	df_votes_star.set_index(['asin','week','is_5_stars'], inplace=True)
+	df_votes_star = df_votes_star.unstack()
+	df_votes_star.columns = df_votes_star.columns.droplevel()
+	df_votes_star.reset_index(inplace=True)
+	df_votes_star.columns = ['asin','week','non_5_stars_avg_vote','5_stars_avg_vote']
+	df_votes_star.fillna(value=0, inplace=True)
+
+	# Computed reviews_count for each reviewer by week for 5-star and non-5-star reviews
+	df_count_star = groups['reviewTime'].count().to_frame().reset_index().rename(columns={'vote':'reviews_count'})
+	df_count_star.set_index(['asin','week','is_5_stars'], inplace=True)
+	df_count_star = df_count_star.unstack()
+	df_count_star.columns = df_count_star.columns.droplevel()
+	df_count_star.reset_index(inplace=True)
+	df_count_star.columns = ['asin','week','non_5_stars_reviews_count','5_stars_reviews_count']
+	df_count_star.fillna(value=0, inplace=True)
+
+	df_votes_star.week = pd.to_datetime(df_votes_star.week)
+	df_count_star.week = pd.to_datetime(df_count_star.week)
+	result.week = pd.to_datetime(result.week)
+	dfs = [result, df_votes_star, df_count_star]
+	result = reduce(lambda x, y: pd.merge(x, y, on=['asin','week']), dfs)
+
+	result.to_csv(save_to, index=None)
 	if verbose:
 		print("Successfully saved product-week statistics to {}".format(save_to))
 

@@ -14,7 +14,7 @@ import pandas as pd
 #from reviewer_analysis import get_reviews_from_list, get_reviewers, process_reviews, get_reviewer_stats
 from product_analysis import get_products_stats, get_category_stats, get_product_burstiness_stats, get_category_burstiness_stats, merge_datasets
 from product_matching import match_products
-from data_processing import get_numeric_columns, get_products_data, get_weekly_stats, add_week_numbers
+from data_processing import get_numeric_columns, get_products_data, get_weekly_stats, add_week_numbers, get_overall_stats
 from product_week import get_product_week_stats
 
 
@@ -45,6 +45,7 @@ if __name__ == "__main__":
     #reviews_numeric = DIR_PATH+'/stat_analysis/office_reviews_numeric.csv'
     reviews_dataset = DIR_PATH+'/did/reviews_mcauley_description_top10_extend.csv' 
     products_dataset = DIR_PATH+'/did/products_mcauley_description_top10_extend.csv'
+    products_overall_dataset = DIR_PATH+'/did/products_overall_mcauley_description_top10_extend.csv'
     products_stats = DIR_PATH+'/stat_analysis/product_stats_top10_extend.csv'
     category_stats = DIR_PATH+'/stat_analysis/category_stats_top10_extend.csv'
     burstiness_stats = DIR_PATH+'/stat_analysis/burstiness_stats_top10_extend.csv'
@@ -63,7 +64,7 @@ if __name__ == "__main__":
 
     # Aggregate to a product-week level
     get_weekly_stats(reviews_dataset, products_dataset)
-    '''
+    
     get_products_data(products_dataset, products_dataset)
     add_week_numbers(products_dataset, products_dataset)
     '''
@@ -79,9 +80,10 @@ if __name__ == "__main__":
     get_category_burstiness_stats(reviews_dataset, products_stats, burstiness_stats)
     merge_datasets(category_stats, burstiness_stats, category_stats, 'asin')
     merge_datasets(category_stats, merged_stats, merged_stats, 'asin')
-
+    '''
 
     # Get product-week level stats
-    get_product_week_stats(reviews_dataset, products_stats, product_week_stats)
+    #get_product_week_stats(reviews_dataset, products_stats, product_week_stats)
+    get_overall_stats(reviews_dataset, products_overall_dataset)
     
 

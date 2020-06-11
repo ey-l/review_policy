@@ -156,6 +156,57 @@ def get_weekly_stats(file_path, save_to, verbose=True):
     df.to_csv(save_to, index=False)
     print("Successfully saved the file with calculated weekly stats")
 
+def get_overall_stats(file_path, save_to, verbose=True):
+    df = pd.read_csv(file_path, index_col=0, low_memory=False)
+    df['week'] = df['reviewTime'].apply(lambda x: datetime.strptime(x, '%Y-%m-%d') - timedelta(days=datetime.strptime(x, '%Y-%m-%d').weekday()))
+    df = df[df.week <= '2016-10-03']
+    df['is_5_stars'] = np.where(df['overall'] == 5, 1, 0)
+    groups = df.groupby(['asin'])
+    #groups = df.groupby(['asin','week'], as_index=False)
+    #cols = ['asin','week','avg_rating','weekly_review_count','avg_word_count','avg_sentiment','avg_vote','avg_image']
+
+    df_counts = groups['reviewTime'].count().to_frame().reset_index().rename(columns={'reviewTime':'total_review_count'})
+
+    df_ratings = groups['overall'].mean().reset_index().rename(columns={'overall':'avg_rating'})
+
+    df_length = groups['word_count'].mean().reset_index().rename(columns={'word_count':'avg_word_count'})
+
+    df_helpfulness = groups['vote'].mean().to_frame().reset_index().rename(columns={'vote':'avg_vote'})
+
+    df_sentiment = groups['sentiment'].mean().to_frame().reset_index().rename(columns={'sentiment':'avg_sentiment'})
+
+    df_images = groups['image'].mean().to_frame().reset_index().rename(columns={'image':'avg_image'})
+
+    df_votes = groups['vote'].mean().to_frame().reset_index().rename(columns={'vote':'weekly_vote_count'})
+
+    groups = df.groupby(['asin','is_5_stars'])
+
+    # Computed avg_vote for each reviewer by week for 5-star and non-5-star reviews
+    df_votes_star = groups['vote'].mean().to_frame().reset_index().rename(columns={'vote':'avg_vote'})
+    df_votes_star.set_index(['asin','is_5_stars'], inplace=True)
+    df_votes_star = df_votes_star.unstack()
+    df_votes_star.columns = df_votes_star.columns.droplevel()
+    df_votes_star.reset_index(inplace=True)
+    df_votes_star.columns = ['asin','non_5_stars_avg_vote','5_stars_avg_vote']
+    df_votes_star.fillna(value=0, inplace=True)
+
+    # Computed reviews_count for each reviewer by week for 5-star and non-5-star reviews
+    df_count_star = groups['reviewTime'].count().to_frame().reset_index().rename(columns={'vote':'reviews_count'})
+    df_count_star.set_index(['asin','is_5_stars'], inplace=True)
+    df_count_star = df_count_star.unstack()
+    df_count_star.columns = df_count_star.columns.droplevel()
+    df_count_star.reset_index(inplace=True)
+    df_count_star.columns = ['asin','non_5_stars_reviews_count','5_stars_reviews_count']
+    df_count_star.fillna(value=0, inplace=True)
+
+    # Merged statistics computed above
+    dfs = [df_counts, df_ratings, df_sentiment, df_length, df_helpfulness, df_images, df_votes, df_votes_star, df_count_star]
+    df_stats = reduce(lambda x, y: pd.merge(x, y, on=['asin']), dfs)
+
+    df = pd.merge(df, df_stats, on=['asin'])
+    df.to_csv(save_to, index=False)
+    print("Successfully saved the file with calculated weekly stats")
+
 def get_products_data(file_path, save_to):
     df = pd.read_csv(file_path, low_memory=False)
     df_cols = ['asin','week','category','brand','price','main_cat','sim1','amazon','avg_rating','weekly_review_count','avg_word_count','avg_sentiment','avg_vote','avg_image','weekly_vote_count','non_5_stars_reviews_count','5_stars_reviews_count','non_5_stars_avg_vote','5_stars_avg_vote']
