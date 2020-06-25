@@ -1,0 +1,300 @@
+---
+title: "Mcauley dataset time-series"
+author: "Eugenie"
+date: "06/25/2020"
+output: 
+  html_document:
+    toc: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load Source File
+
+Load data.
+```{r, include=FALSE}
+########################## load library ############################
+## for data manipulation
+library(plyr)
+library(dplyr)
+library(tidyr)
+library(purrr)
+library(readr)
+library(stringr)
+library(reshape)
+
+## for plotting
+library(ggplot2)
+library(ggmosaic)
+library(plotly)
+library(ggpubr)
+
+## for modelling
+library(plm)
+library(mgcv)
+library(GoodmanKruskal)
+
+## for sentiment analysis
+library(tidytext)
+library(textdata)
+library(textclean)
+library(gutenbergr)
+library(scales)
+library(tm)
+library(sentimentr)
+
+## read .xlsx files
+library(readxl)
+
+## time/date
+library(chron)
+library(lubridate)
+
+## for tables
+library(stargazer)
+```
+
+```{r}
+reviews3.csv <- read.csv("~/Dropbox/Eugenie/data/processed_julian_amazon_data/did/reviews_mcauley_description_top10_extend.csv")
+```
+
+
+# Data Processing
+Get selected columns for further analysis.
+```{r}
+reviews.product <- reviews3.csv
+
+#names(reviews.product) <- c('recid','item_id','incentivized','product_cat','rating','word_count','helpful_yes','date','year','month','week','positive','neutral')
+```
+
+Drop records before 2012.
+```{r}
+#reviews2.temp <- reviews2.temp[as.numeric(as.character(reviews2.temp$year))>2013,]
+```
+
+Drop records after 2018-10-07 since it's not a full week.
+```{r}
+## turn factor to date variable
+reviews.product$reviewTime <- as.Date(reviews.product$reviewTime, "%Y-%m-%d")
+reviews.product <- reviews.product[reviews.product$reviewTime < '2017-04-06',]
+```
+
+
+# Time Data vs. Positive Sentiment Probability
+## Data processing
+
+Split data on date without splitting incentivized vs. non-incentivized reviews after 2016-10-03.
+```{r,include=FALSE}
+## split on date
+reviews.product_before_non <- reviews.product[reviews.product$reviewTime<'2016-10-03'&reviews.product$amazon==0,]
+reviews.product_before_amazon <- reviews.product[reviews.product$reviewTime<'2016-10-03'&reviews.product$amazon==1,]
+reviews.product_after_non <- reviews.product[reviews.product$reviewTime>'2016-10-03'&reviews.product$amazon==0,]
+reviews.product_after_amazon <- reviews.product[reviews.product$reviewTime>'2016-10-03'&reviews.product$amazon==1,]
+```
+
+```{r,include=FALSE}
+reviews.product_non <- reviews.product[reviews.product$amazon==0,]
+reviews.product_amazon <- reviews.product[reviews.product$amazon==1,]
+```
+
+```{r,include=FALSE}
+reviews.x <- reviews.product_non %>%
+  group_by(reviewTime) %>%
+  mutate(day_positive = n())
+
+reviews.y <- reviews.product_amazon %>%
+  group_by(reviewTime) %>%
+  mutate(day_positive = n())
+```
+
+```{r,echo=FALSE}
+ggplot(NULL, aes(x = reviewTime, y = day_positive))+
+  geom_point(data=reviews.y, aes(color = "amazon"), alpha = 0.7,size=0.2)+
+  geom_point(data=reviews.x, aes(color = "non-amazon"), alpha = 0.3,size=0.2)+
+  geom_smooth(data=reviews.y,method = 'auto',aes(color='amazon'),size=1,alpha = 0.6)+
+  geom_smooth(data=reviews.x,method = 'auto',aes(color='non-amazon'),size=1,alpha = 0.6)+
+  theme_minimal()+
+  #facet_grid(rows=vars(product_cat))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  labs(x='Date',y='Daily count',fill='category',title='Product Category Review Count by Date')
+```
+
+```{r,include=FALSE}
+reviews.x <- reviews.product_non %>%
+  group_by(reviewTime) %>%
+  mutate(day_positive = mean(overall))
+
+reviews.y <- reviews.product_amazon %>%
+  group_by(reviewTime) %>%
+  mutate(day_positive = mean(overall))
+```
+
+```{r,echo=FALSE}
+ggplot(NULL, aes(x = reviewTime, y = day_positive))+
+  geom_point(data=reviews.y, aes(color = "amazon"), alpha = 0.7,size=0.2)+
+  geom_point(data=reviews.x, aes(color = "non-amazon"), alpha = 0.3,size=0.2)+
+  geom_smooth(data=reviews.y,method = 'auto',aes(color='amazon'),size=1,alpha = 0.6)+
+  geom_smooth(data=reviews.x,method = 'auto',aes(color='non-amazon'),size=1,alpha = 0.6)+
+  theme_minimal()+
+  #facet_grid(rows=vars(product_cat))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  labs(x='Date',y='Mean rating',fill='category',title='Product Category Mean Rating by Date')
+```
+
+```{r,include=FALSE}
+reviews.x <- reviews.product_non %>%
+  group_by(reviewTime) %>%
+  mutate(day_positive = mean(sentiment))
+
+reviews.y <- reviews.product_amazon %>%
+  group_by(reviewTime) %>%
+  mutate(day_positive = mean(sentiment))
+```
+
+```{r,echo=FALSE}
+ggplot(NULL, aes(x = reviewTime, y = day_positive))+
+  geom_point(data=reviews.y, aes(color = "amazon"), alpha = 0.7,size=0.2)+
+  geom_point(data=reviews.x, aes(color = "non-amazon"), alpha = 0.3,size=0.2)+
+  geom_smooth(data=reviews.y,method = 'auto',aes(color='amazon'),size=1,alpha = 0.6)+
+  geom_smooth(data=reviews.x,method = 'auto',aes(color='non-amazon'),size=1,alpha = 0.6)+
+  theme_minimal()+
+  #facet_grid(rows=vars(product_cat))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  labs(x='Date',y='Mean sentiment',fill='category',title='Product Category Mean Sentiment by Date')
+```
+
+```{r,include=FALSE}
+reviews.x <- reviews.product_non %>%
+  group_by(reviewTime) %>%
+  mutate(day_positive = mean(word_count))
+
+reviews.y <- reviews.product_amazon %>%
+  group_by(reviewTime) %>%
+  mutate(day_positive = mean(word_count))
+```
+
+```{r,echo=FALSE}
+ggplot(NULL, aes(x = reviewTime, y = day_positive))+
+  geom_point(data=reviews.y, aes(color = "amazon"), alpha = 0.7,size=0.2)+
+  geom_point(data=reviews.x, aes(color = "non-amazon"), alpha = 0.3,size=0.2)+
+  geom_smooth(data=reviews.y,method = 'auto',aes(color='amazon'),size=1,alpha = 0.6)+
+  geom_smooth(data=reviews.x,method = 'auto',aes(color='non-amazon'),size=1,alpha = 0.6)+
+  theme_minimal()+
+  #facet_grid(rows=vars(product_cat))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  labs(x='Date',y='Mean word count',fill='category',title='Product Category Mean Word Count by Date')
+```
+
+```{r,include=FALSE}
+reviews.x <- reviews.product_non %>%
+  group_by(reviewTime) %>%
+  mutate(day_positive = mean(image))
+
+reviews.y <- reviews.product_amazon %>%
+  group_by(reviewTime) %>%
+  mutate(day_positive = mean(image))
+```
+
+```{r,echo=FALSE}
+ggplot(NULL, aes(x = reviewTime, y = day_positive))+
+  geom_point(data=reviews.y, aes(color = "amazon"), alpha = 0.7,size=0.2)+
+  geom_point(data=reviews.x, aes(color = "non-amazon"), alpha = 0.3,size=0.2)+
+  geom_smooth(data=reviews.y,method = 'auto',aes(color='amazon'),size=1,alpha = 0.6)+
+  geom_smooth(data=reviews.x,method = 'auto',aes(color='non-amazon'),size=1,alpha = 0.6)+
+  theme_minimal()+
+  #facet_grid(rows=vars(product_cat))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  labs(x='Date',y='Mean image count',fill='category',title='Product Category Mean Image Count by Date')
+```
+
+```{r,include=FALSE}
+reviews.x <- reviews.product_non %>%
+  group_by(reviewTime) %>%
+  mutate(day_positive = mean(vote))
+
+reviews.y <- reviews.product_amazon %>%
+  group_by(reviewTime) %>%
+  mutate(day_positive = mean(vote))
+```
+
+```{r,echo=FALSE}
+ggplot(NULL, aes(x = reviewTime, y = day_positive))+
+  geom_point(data=reviews.y, aes(color = "amazon"), alpha = 0.7,size=0.2)+
+  geom_point(data=reviews.x, aes(color = "non-amazon"), alpha = 0.3,size=0.2)+
+  geom_smooth(data=reviews.y,method = 'auto',aes(color='amazon'),size=1,alpha = 0.6)+
+  geom_smooth(data=reviews.x,method = 'auto',aes(color='non-amazon'),size=1,alpha = 0.6)+
+  theme_minimal()+
+  #facet_grid(rows=vars(product_cat))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  labs(x='Date',y='Mean helpfulness count',fill='category',title='Product Category Mean Helpfulness Count by Date')
+```
+
+
+Compute positive sentiment stats without splitting incentivized vs. non-incentivized reviews after 2016-10-03.
+```{r,include=FALSE}
+## mean positive sentiment probability by day
+reviews.product_before_non <- reviews.product_before_non %>%
+  group_by(reviewTime) %>%
+  mutate(day_positive = mean(sentiment))
+
+reviews.product_before_amazon <- reviews.product_before_amazon %>%
+  group_by(reviewTime) %>%
+  mutate(day_positive = mean(sentiment))
+
+reviews.product_after_non <- reviews.product_after_non %>%
+  group_by(reviewTime) %>%
+  mutate(day_positive = mean(sentiment))
+
+reviews.product_after_amazon <- reviews.product_after_amazon %>%
+  group_by(reviewTime) %>%
+  mutate(day_positive = mean(sentiment))
+
+## mean positive sentiment probability by week
+# reviews.product_non <- reviews.product_non %>%
+#   group_by(product_cat, year, week(date)) %>%
+#   mutate(week_positive = mean(positive))
+# 
+# reviews.product_incentivized <- reviews.product_incentivized %>%
+#   group_by(product_cat, year, week(date)) %>%
+#   mutate(week_positive = mean(positive))
+# 
+# reviews.product_after <- reviews.product_after %>%
+#   group_by(product_cat, year, week(date)) %>%
+#   mutate(week_positive = mean(positive))
+
+# ## mean positive sentiment probability by month
+# reviews.product_non <- reviews.product_non %>%
+#   group_by(product_cat, month) %>%
+#   mutate(month_positive = mean(positive))
+# 
+# reviews.product_incentivized <- reviews.product_incentivized %>%
+#   group_by(product_cat, month) %>%
+#   mutate(month_positive = mean(positive))
+# 
+# reviews.product_after <- reviews.product_after %>%
+#   group_by(product_cat, month) %>%
+#   mutate(month_positive = mean(positive))
+```
+
+## Plot mean positive sentiment probability over time by product_cat without splitting incentivized vs. non-incentivized reviews after 2016-10-03
+
+### Positive sentiment probability average by day
+```{r,echo=FALSE}
+## plot by day
+ggplot(NULL, aes(x = reviewTime, y = day_positive))+
+  geom_point(data=reviews.product_before_amazon, aes(color = "amazon_before"), alpha = 0.7,size=0.2)+
+  geom_point(data=reviews.product_before_non, aes(color = "non-amazon_before"), alpha = 0.3,size=0.2)+
+  geom_point(data=reviews.product_after_non, aes(color = "non-amazon_after"), alpha = 0.7,size=0.2)+
+  geom_point(data=reviews.product_after_amazon, aes(color = "amazon_after"), alpha = 0.7,size=0.2)+
+  geom_smooth(data=reviews.product_before_amazon,method = 'auto',aes(color='amazon_before'),size=1,alpha = 0.6)+
+  geom_smooth(data=reviews.product_before_non,method = 'auto',aes(color='non-amazon_before'),size=1,alpha = 0.6)+
+  geom_smooth(data=reviews.product_after_non,method = 'auto',aes(color='non-amazon_after'),size=1,alpha = 0.6)+
+  geom_smooth(data=reviews.product_after_amazon,method = 'auto',aes(color='amazon_after'),size=1,alpha = 0.6)+
+  theme_minimal()+
+  #facet_grid(rows=vars(product_cat))+
+  geom_vline(xintercept = as.Date('2016-10-03'), color = "black", size=0.3)+
+  labs(x='Date',y='Mean sentiment',fill='category',title='Product Category Mean Sentiment by Date')
+```
